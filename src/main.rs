@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use anyhow::Result;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use libp2p::PeerId;
 use fai_protocol::FaiProtocol;
 
@@ -142,8 +143,13 @@ async fn main() -> Result<()> {
         Commands::Peers => {
             println!("Discovering peers on local network...");
             
+            // Create storage manager
+            let storage = Arc::new(fai_protocol::storage::StorageManager::new(
+                Path::new(".fai").join("storage")
+            )?);
+            
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new() {
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
@@ -213,8 +219,13 @@ async fn main() -> Result<()> {
             
             println!("Discovering peers...");
             
+            // Create storage manager
+            let storage = Arc::new(fai_protocol::storage::StorageManager::new(
+                Path::new(".fai").join("storage")
+            )?);
+            
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new() {
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
@@ -277,8 +288,13 @@ async fn main() -> Result<()> {
             
             println!("FAI server starting...");
             
+            // Create storage manager
+            let storage = Arc::new(fai_protocol::storage::StorageManager::new(
+                Path::new(".fai").join("storage")
+            )?);
+            
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new() {
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
