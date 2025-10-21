@@ -243,6 +243,8 @@ async fn main() -> Result<()> {
             let discovery_start = std::time::Instant::now();
             let discovery_duration = std::time::Duration::from_secs(10);
             
+            println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
+            
             while discovery_start.elapsed() < discovery_duration {
                 if let Err(e) = network_manager.poll_events().await {
                     eprintln!("Error during peer discovery: {}", e);
@@ -255,6 +257,10 @@ async fn main() -> Result<()> {
             let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
             
             if !target_peer_found {
+                println!("Discovered {} peers, but target peer {} not found", peers.len(), peer_id);
+                for peer in &peers {
+                    println!("  - {}", peer.peer_id);
+                }
                 return Err(anyhow::anyhow!("Peer {} not discovered in local network", peer_id));
             }
             
