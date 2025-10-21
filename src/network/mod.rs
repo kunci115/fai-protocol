@@ -105,7 +105,8 @@ impl NetworkManager {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
                 [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
-                libp2p::request_response::Config::default(),
+                libp2p::request_response::Config::default()
+                    .with_connection_keep_alive(std::time::Duration::from_secs(60)),
             ),
         };
 
@@ -113,7 +114,7 @@ impl NetworkManager {
         let swarm = SwarmBuilder::with_existing_identity(local_key)
             .with_tokio()
             .with_tcp(
-                libp2p::tcp::Config::default(),
+                libp2p::tcp::Config::default().nodelay(true),
                 libp2p::noise::Config::new,
                 yamux::Config::default,
             )?
@@ -238,7 +239,6 @@ impl NetworkManager {
                                 request_id, response.hash, 
                                 response.data.as_ref().map(|d| d.len()).unwrap_or(0));
                         }
-                        _ => {}
                     }
                 }
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
@@ -353,6 +353,12 @@ impl NetworkManager {
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
+        }
+        
+        // Ensure we're connected before sending request
+        if !self.swarm.is_connected(&peer) {
+            println!("DEBUG: Not connected to peer {}, attempting to reconnect", peer);
+            return Ok(None);
         }
         
         let request_id = self.swarm.behaviour_mut().request_response.send_request(
