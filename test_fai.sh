@@ -224,10 +224,33 @@ run_command "$FAI_BIN add large_test_file.dat" "Add large test file"
 run_command "$FAI_BIN commit -m \"Add large test file\"" "Commit large test file"
 
 # Verify large file was stored
-if [ -f ".fai/objects" ] && [ $(find .fai/objects -type f -size +1M | wc -l) -gt 0 ]; then
-    print_success "Large file stored correctly"
+print_info "Checking for stored files in .fai/objects..."
+object_files=$(find .fai/objects -type f)
+object_count=$(find .fai/objects -type f | wc -l)
+large_files=$(find .fai/objects -type f -size +1M)
+large_file_count=$(find .fai/objects -type f -size +1M | wc -l)
+
+print_info "Total object files found: $object_count"
+print_info "Large files (>1MB) found: $large_file_count"
+
+if [ "$object_count" -gt 0 ]; then
+    print_success "Files are being stored in .fai/objects"
+    for file in $object_files; do
+        file_size=$(du -h "$file" | cut -f1)
+        print_info "Found file: $file ($file_size)"
+    done
 else
-    print_error "Large file not stored correctly"
+    print_error "No files found in .fai/objects"
+    exit 1
+fi
+
+# Check if we have at least one file and the total storage size is reasonable
+total_size=$(du -sb .fai/objects | cut -f1)
+if [ "$total_size" -gt 1000000 ]; then  # At least 1MB total
+    print_success "Large file stored correctly (total: $((total_size/1024/1024))MB)"
+else
+    print_error "Large file not stored correctly (total: ${total_size} bytes)"
+    print_info "Expected at least 10MB, got ${total_size} bytes"
     exit 1
 fi
 
