@@ -85,6 +85,7 @@ fn main() -> Result<()> {
                     println!("  {} ({} - {} bytes)", file_path, &file_hash[..8], file_size);
                 }
             }
+        }
     }
 
     Ok(())
