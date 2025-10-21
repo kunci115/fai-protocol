@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
             fs::create_dir_all(".fai/refs")?;
             
             // Initialize storage manager (this creates the database)
-            let _storage = StorageManager::new()?;
+            let _storage = StorageManager::new(std::path::PathBuf::from(".fai"))?;
             
             println!("Initialized FAI repository in .fai/");
         }
@@ -51,8 +51,9 @@ async fn main() -> Result<()> {
             }
             
             // Initialize storage and store the model
-            let storage = StorageManager::new()?;
-            let hash = storage.store(&path)?;
+            let storage = StorageManager::new(std::path::PathBuf::from(".fai"))?;
+            let file_content = fs::read(&path)?;
+            let hash = storage.store(&file_content)?;
             
             // Extract model name from path
             let model_name = Path::new(&path)

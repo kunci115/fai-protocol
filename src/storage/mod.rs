@@ -3,9 +3,25 @@
 //! Handles content-addressed storage of AI models and metadata management.
 
 use anyhow::{Result, anyhow};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use blake3::Hasher;
+use serde::{Deserialize, Serialize};
+
+/// Metadata for a stored AI model
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelMetadata {
+    /// Content hash using BLAKE3
+    pub hash: String,
+    /// Model name/identifier
+    pub name: String,
+    /// Model version
+    pub version: String,
+    /// Size in bytes
+    pub size: u64,
+    /// Creation timestamp
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
 
 /// Storage manager for AI models
 pub struct StorageManager {
@@ -101,7 +117,6 @@ impl StorageManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::TempDir;
 
     fn create_temp_storage() -> (StorageManager, TempDir) {

@@ -13,7 +13,7 @@ pub struct FaiProtocol {
 impl FaiProtocol {
     /// Create a new FAI Protocol instance
     pub fn new() -> anyhow::Result<Self> {
-        let storage = storage::StorageManager::new()?;
+        let storage = storage::StorageManager::new(std::path::PathBuf::from(".fai"))?;
         Ok(Self { storage })
     }
 }
