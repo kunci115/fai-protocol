@@ -254,6 +254,7 @@ async fn main() -> Result<()> {
             }
             
             println!("DEBUG: Discovery time elapsed, checking results...");
+            println!("DEBUG: About to check discovered peers...");
             
             // Check if target peer was discovered
             let peers = network_manager.list_peers();
