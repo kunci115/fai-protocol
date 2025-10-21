@@ -8,11 +8,26 @@ pub mod database;
 
 use std::path::PathBuf;
 use anyhow::Result;
+use chrono::{DateTime, Utc};
+
+/// Information about a commit for display purposes
+#[derive(Debug, Clone)]
+pub struct CommitInfo {
+    /// Commit hash
+    pub hash: String,
+    /// Commit message
+    pub message: String,
+    /// Commit timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Parent commit hash (None for initial commit)
+    pub parent_hash: Option<String>,
+}
 
 /// Main library interface for FAI Protocol
 pub struct FaiProtocol {
     storage: storage::StorageManager,
     database: database::DatabaseManager,
+    fai_path: PathBuf,
 }
 
 impl FaiProtocol {
@@ -21,7 +36,7 @@ impl FaiProtocol {
         let fai_path = PathBuf::from(".fai");
         let storage = storage::StorageManager::new(fai_path.clone())?;
         let database = database::DatabaseManager::new(&fai_path.join("db.sqlite"))?;
-        Ok(Self { storage, database })
+        Ok(Self { storage, database, fai_path })
     }
 
     /// Initialize a new FAI repository
@@ -79,6 +94,68 @@ impl FaiProtocol {
     /// Get reference to the database manager
     pub fn database(&self) -> &database::DatabaseManager {
         &self.database
+    }
+
+    /// Create a commit from staged files
+    pub fn commit(&self, message: &str) -> Result<String> {
+        // Get staged files
+        let staged_files = self.database.get_staged_files()?;
+        
+        if staged_files.is_empty() {
+            return Err(anyhow::anyhow!("Nothing to commit"));
+        }
+
+        // Read current HEAD
+        let parent_hash = self.get_head()?;
+        
+        // Generate commit hash
+        let commit_data = format!("{}{}{:?}", 
+            Utc::now().timestamp_millis(),
+            message,
+            staged_files
+        );
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(commit_data.as_bytes());
+        let commit_hash = hasher.finalize().to_hex().to_string();
+
+        // Create commit in database
+        self.database.create_commit(&commit_hash, message, parent_hash.as_deref(), &staged_files)?;
+
+        // Update HEAD file
+        std::fs::write(self.fai_path.join("HEAD"), &commit_hash)?;
+
+        // Clear staging area
+        self.database.clear_staging()?;
+
+        Ok(commit_hash)
+    }
+
+    /// Get commit log
+    pub fn get_log(&self) -> Result<Vec<CommitInfo>> {
+        let commits = self.database.get_commit_history(None)?;
+        Ok(commits.into_iter().map(|c| CommitInfo {
+            hash: c.hash,
+            message: c.message,
+            timestamp: c.timestamp,
+            parent_hash: c.parent_hash,
+        }).collect())
+    }
+
+    /// Read current HEAD commit hash
+    fn get_head(&self) -> Result<Option<String>> {
+        let head_path = self.fai_path.join("HEAD");
+        if head_path.exists() {
+            let content = std::fs::read_to_string(&head_path)?;
+            // Handle both direct hash and ref: refs/heads/main format
+            if content.starts_with("ref:") {
+                // For now, return None for branch refs (not implemented yet)
+                Ok(None)
+            } else {
+                Ok(Some(content.trim().to_string()))
+            }
+        } else {
+            Ok(None)
+        }
     }
 }
 

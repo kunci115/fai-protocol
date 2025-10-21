@@ -22,6 +22,8 @@ enum Commands {
     Commit { message: String },
     /// Show repository status
     Status,
+    /// Show commit history
+    Log,
 }
 
 fn main() -> Result<()> {
@@ -60,9 +62,18 @@ fn main() -> Result<()> {
                 return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
             }
             
-            println!("Committing with message: {}", message);
-            // TODO: Implement commit functionality
-            println!("Commit functionality not yet implemented");
+            // Initialize FAI protocol
+            let fai = FaiProtocol::new()?;
+            
+            // Create commit
+            match fai.commit(&message) {
+                Ok(hash) => {
+                    println!("Created commit {}", &hash[..8]);
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create commit: {}", e));
+                }
+            }
         }
         Commands::Status => {
             // Check if repository is initialized
@@ -83,6 +94,30 @@ fn main() -> Result<()> {
                 println!();
                 for (file_path, file_hash, file_size) in staged_files {
                     println!("  {} ({} - {} bytes)", file_path, &file_hash[..8], file_size);
+                }
+            }
+        }
+        Commands::Log => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            // Initialize FAI protocol
+            let fai = FaiProtocol::new()?;
+            
+            // Get commit log
+            let commits = fai.get_log()?;
+            
+            if commits.is_empty() {
+                println!("No commits yet");
+            } else {
+                for commit in commits {
+                    println!("commit {}", commit.hash);
+                    println!("Date:   {}", commit.timestamp.format("%Y-%m-%d %H:%M:%S"));
+                    println!();
+                    println!("    {}", commit.message);
+                    println!();
                 }
             }
         }
