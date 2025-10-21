@@ -177,7 +177,7 @@ impl DatabaseManager {
             Ok(Some(Commit {
                 hash: row.get(0)?,
                 message: row.get(1)?,
-                timestamp: DateTime::from_timestamp(row.get(2)?, 0).unwrap_or_default(),
+                timestamp: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
                 parent_hash: row.get(3)?,
             }))
         } else {
@@ -250,7 +250,7 @@ impl DatabaseManager {
             Ok(Commit {
                 hash: row.get(0)?,
                 message: row.get(1)?,
-                timestamp: DateTime::from_timestamp(row.get(2)?, 0).unwrap_or_default(),
+                timestamp: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
                 parent_hash: row.get(3)?,
             })
         })?;
