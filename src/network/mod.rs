@@ -232,13 +232,11 @@ impl NetworkManager {
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
                 }
-                SwarmEvent::ConnectionEstablished { peer_id, endpoint_id, num_established, .. } => {
-                    println!("DEBUG: Connection established to {} (endpoint: {}, established: {})", 
-                        peer_id, endpoint_id, num_established);
+                SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                    println!("DEBUG: Connection established to {}", peer_id);
                 }
-                SwarmEvent::ConnectionClosed { peer_id, cause, endpoint_id, num_established, .. } => {
-                    println!("DEBUG: Connection closed to {} (endpoint: {}, reason: {:?}, remaining: {})", 
-                        peer_id, endpoint_id, cause, num_established);
+                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                    println!("DEBUG: Connection closed to {} (reason: {:?})", peer_id, cause);
                 }
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
                     libp2p::request_response::Event::InboundFailure { 
@@ -253,10 +251,10 @@ impl NetworkManager {
                     libp2p::request_response::Event::ResponseSent { 
                         request_id, 
                         peer, 
-                        result 
+                        ..
                     }
                 )) => {
-                    println!("DEBUG: Response sent to {} for request {:?} (result: {:?})", peer, request_id, result);
+                    println!("DEBUG: Response sent to {} for request {:?}", peer, request_id);
                 }
                 _ => {}
             }
@@ -317,7 +315,7 @@ impl NetworkManager {
         let connected_peers = self.swarm.connected_peers().collect::<Vec<_>>();
         println!("DEBUG: Currently connected to {} peers: {:?}", connected_peers.len(), connected_peers);
         
-        if !connected_peers.contains(&peer) {
+        if !connected_peers.iter().any(|p| *p == peer) {
             println!("DEBUG: Peer {} is not connected, attempting to dial", peer);
             // Try to find addresses for this peer
             if let Some(peer_info) = self.discovered_peers.get(&peer) {
@@ -337,7 +335,7 @@ impl NetworkManager {
             // Wait a bit for connection to establish
             for _ in 0..50 {
                 let current_peers = self.swarm.connected_peers().collect::<Vec<_>>();
-                if current_peers.contains(&peer) {
+                if current_peers.iter().any(|p| *p == peer) {
                     println!("DEBUG: Successfully connected to peer {}", peer);
                     break;
                 }
