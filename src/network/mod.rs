@@ -178,8 +178,7 @@ impl NetworkManager {
                     }
                 )) => {
                     if let libp2p::request_response::Message::Request { 
-                        request_id, 
-                        request, 
+                        request: _, 
                         channel, 
                         .. 
                     } = message {
@@ -287,13 +286,18 @@ impl NetworkManager {
                             println!("Received chunk response for hash: {}", response.hash);
                             return Ok(response.data);
                         }
-                        libp2p::request_response::Message::OutboundFailure { 
-                            request_id: response_id, 
-                            error 
-                        } if response_id == request_id => {
-                            println!("Request failed for hash: {} (error: {:?})", hash, error);
-                            return Ok(None);
-                        }
+                        _ => {}
+                    }
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::OutboundFailure { 
+                        request_id: response_id, 
+                        peer: _, 
+                        error 
+                    }
+                )) if response_id == request_id => {
+                    println!("Request failed for hash: {} (error: {:?})", hash, error);
+                    return Ok(None);
                         _ => {}
                     }
                 }
