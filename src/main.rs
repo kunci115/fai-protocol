@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
 use std::path::Path;
+use std::sync::Arc;
+use std::str::FromStr;
+use libp2p::PeerId;
 use fai_protocol::FaiProtocol;
 
 #[derive(Parser)]
@@ -30,6 +33,13 @@ enum Commands {
     Log,
     /// Discover and list network peers
     Peers,
+    /// Fetch a chunk of data from a peer
+    Fetch {
+        /// Peer ID to fetch from
+        peer_id: String,
+        /// Hash of the data to fetch
+        hash: String,
+    },
 }
 
 #[tokio::main]
@@ -189,6 +199,74 @@ async fn main() -> Result<()> {
             }
             
             println!("Found {} peer(s)", peers.len());
+        }
+        Commands::Fetch { peer_id, hash } => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            // Parse peer ID
+            let target_peer = PeerId::from_str(&peer_id)
+                .map_err(|_| anyhow::anyhow!("Invalid peer ID format: {}", peer_id))?;
+            
+            println!("Discovering peers...");
+            
+            // Create network manager
+            let mut network_manager = match fai_protocol::network::NetworkManager::new() {
+                Ok(nm) => nm,
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                }
+            };
+            
+            // Start the network manager
+            if let Err(e) = network_manager.start() {
+                return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
+            }
+            
+            println!("Local peer ID: {}", network_manager.local_peer_id());
+            
+            // Discover peers for 10 seconds
+            let discovery_start = std::time::Instant::now();
+            let discovery_duration = std::time::Duration::from_secs(10);
+            
+            while discovery_start.elapsed() < discovery_duration {
+                if let Err(e) = network_manager.poll_events().await {
+                    eprintln!("Error during peer discovery: {}", e);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            
+            // Check if target peer was discovered
+            let peers = network_manager.list_peers();
+            let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
+            
+            if !target_peer_found {
+                return Err(anyhow::anyhow!("Peer {} not discovered in local network", peer_id));
+            }
+            
+            println!("Found peer {}", peer_id);
+            println!("Requesting chunk {}...", &hash[..8]);
+            
+            // Request the chunk
+            match network_manager.request_chunk(target_peer, &hash).await {
+                Ok(Some(data)) => {
+                    println!("✓ Received {} bytes", data.len());
+                    
+                    // Save to file
+                    let filename = format!("fetched_{}.dat", &hash[..8]);
+                    std::fs::write(&filename, data)?;
+                    
+                    println!("Saved to: {}", filename);
+                }
+                Ok(None) => {
+                    return Err(anyhow::anyhow!("✗ Chunk not available from peer {}", peer_id));
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to fetch chunk: {}", e));
+                }
+            }
         }
     }
 
