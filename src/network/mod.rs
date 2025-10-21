@@ -105,7 +105,8 @@ impl NetworkManager {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
                 [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
-                libp2p::request_response::Config::default(),
+                libp2p::request_response::Config::default()
+                    .with_keep_alive(libp2p::swarm::keep_alive::KeepAlive::Yes),
             ),
         };
 
@@ -186,48 +187,73 @@ impl NetworkManager {
                         message 
                     }
                 )) => {
-                    println!("DEBUG: Request-response message from {}: {:?}", peer, message);
-                    if let libp2p::request_response::Message::Request { 
-                        request, 
-                        channel, 
-                        .. 
-                    } = message {
-                    println!("Received chunk request from {} for hash: {}", peer, request.hash);
-                    
-                    // Try to retrieve the data from storage
-                    let data = match self.storage.retrieve(&request.hash) {
-                        Ok(data) => {
-                            println!("Found chunk {} ({} bytes)", request.hash, data.len());
-                            Some(data)
+                    match message {
+                        libp2p::request_response::Message::Request { 
+                            request, 
+                            channel, 
+                            request_id,
+                            ..
+                        } => {
+                            println!("DEBUG: Received chunk request {} from {} (request_id: {:?})", request.hash, peer, request_id);
+                            
+                            // Try to retrieve the data from storage
+                            let data = match self.storage.retrieve(&request.hash) {
+                                Ok(data) => {
+                                    println!("Found chunk {} ({} bytes)", request.hash, data.len());
+                                    Some(data)
+                                }
+                                Err(e) => {
+                                    println!("Chunk {} not found: {}", request.hash, e);
+                                    None
+                                }
+                            };
+                            
+                            let response = ChunkResponse {
+                                hash: request.hash.clone(),
+                                data,
+                            };
+                            
+                            // Copy values before moving response
+                            let hash_copy = response.hash.clone();
+                            let data_len = response.data.as_ref().map(|d| d.len()).unwrap_or(0);
+                            
+                            if let Err(e) = self.swarm.behaviour_mut().request_response.send_response(
+                                channel,
+                                response
+                            ) {
+                                eprintln!("Failed to send response: {:?}", e);
+                            } else {
+                                if data_len > 0 {
+                                    println!("Sent chunk {} ({} bytes) to peer {}", hash_copy, data_len, peer);
+                                } else {
+                                    println!("Sent chunk {} (not found) to peer {}", hash_copy, peer);
+                                }
+                            }
                         }
-                        Err(_) => {
-                            println!("Chunk {} not found", request.hash);
-                            None
+                        libp2p::request_response::Message::Response { 
+                            request_id, 
+                            response,
+                            ..
+                        } => {
+                            println!("DEBUG: Received response for request {:?}: hash={}, data_len={}", 
+                                request_id, response.hash, 
+                                response.data.as_ref().map(|d| d.len()).unwrap_or(0));
                         }
-                    };
-                    
-                    let response = ChunkResponse {
-                        hash: request.hash.clone(),
-                        data,
-                    };
-                    
-                    // Copy values before moving response
-                    let hash_copy = response.hash.clone();
-                    let data_len = response.data.as_ref().map(|d| d.len()).unwrap_or(0);
-                    
-                    if let Err(e) = self.swarm.behaviour_mut().request_response.send_response(
-                        channel,
-                        response
-                    ) {
-                        eprintln!("Failed to send response: {:?}", e);
-                    } else {
-                        if data_len > 0 {
-                            println!("Sent chunk {} ({} bytes) to peer {}", hash_copy, data_len, peer);
-                        } else {
-                            println!("Sent chunk {} (not found) to peer {}", hash_copy, peer);
+                        libp2p::request_response::Message::OutboundFailure { 
+                            request_id, 
+                            error, 
+                            ..
+                        } => {
+                            println!("DEBUG: Outbound request failed: request_id={:?}, error={:?}", request_id, error);
+                        }
+                        libp2p::request_response::Message::InboundFailure { 
+                            request_id, 
+                            error, 
+                            ..
+                        } => {
+                            println!("DEBUG: Inbound request failed: request_id={:?}, error={:?}", request_id, error);
                         }
                     }
-                }
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
@@ -366,8 +392,22 @@ impl NetworkManager {
                             request_id: response_id, 
                             response 
                         } if response_id == request_id => {
-                            println!("Received chunk response for hash: {}", response.hash);
+                            println!("DEBUG: Received matching response for request {:?}: hash={}", response_id, response.hash);
                             return Ok(response.data);
+                        }
+                        libp2p::request_response::Message::Response { 
+                            request_id: response_id, 
+                            response 
+                        } => {
+                            println!("DEBUG: Received non-matching response for request {:?}: hash={}", response_id, response.hash);
+                        }
+                        libp2p::request_response::Message::OutboundFailure { 
+                            request_id: response_id, 
+                            error, 
+                            ..
+                        } if response_id == request_id => {
+                            println!("DEBUG: Our request failed: request_id={:?}, error={:?}", request_id, error);
+                            return Ok(None);
                         }
                         _ => {}
                     }
