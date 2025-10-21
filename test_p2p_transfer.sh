@@ -149,10 +149,13 @@ done
 if kill -0 $FETCH_PID 2>/dev/null; then
     print_error "Fetch timed out after $TIMEOUT seconds"
     kill $FETCH_PID 2>/dev/null || true
-    echo -e "\n${RED}=== FETCH LOG ===${NC}"
-    cat "$FETCH_LOG"
-    echo -e "\n${RED}=== SERVER LOG ===${NC}"
+    echo ""
+    echo "=== Server Log ==="
     cat "$SERVE_LOG"
+    echo ""
+    echo "=== Fetch Log ==="
+    cat "$FETCH_LOG"
+    echo ""
     exit 1
 fi
 
