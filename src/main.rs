@@ -1,8 +1,7 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
-use std::fs;
 use std::path::Path;
-use fai_protocol::storage::{StorageManager, ModelMetadata};
+use fai_protocol::FaiProtocol;
 
 #[derive(Parser)]
 #[command(name = "fai")]
@@ -31,58 +30,62 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Init => {
+            // Check if already initialized
+            if Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("FAI repository already initialized"));
+            }
+            
             println!("Initializing FAI repository...");
-            
-            // Create .fai directory structure
-            fs::create_dir_all(".fai/objects")?;
-            fs::create_dir_all(".fai/refs")?;
-            
-            // Initialize storage manager (this creates the database)
-            let _storage = StorageManager::new(std::path::PathBuf::from(".fai"))?;
-            
+            FaiProtocol::init()?;
             println!("Initialized FAI repository in .fai/");
         }
         Commands::Add { path } => {
-            println!("Adding model: {}", path);
-            
-            // Check if file exists
-            if !Path::new(&path).exists() {
-                return Err(anyhow::anyhow!("File not found: {}", path));
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
             }
             
-            // Initialize storage and store the model
-            let storage = StorageManager::new(std::path::PathBuf::from(".fai"))?;
-            let file_content = fs::read(&path)?;
-            let hash = storage.store(&file_content)?;
+            println!("Adding {} to staging area...", path);
             
-            // Extract model name from path
-            let model_name = Path::new(&path)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
+            // Initialize FAI protocol
+            let fai = FaiProtocol::new()?;
             
-            // Create metadata
-            let metadata = ModelMetadata {
-                hash: hash.clone(),
-                name: model_name.to_string(),
-                version: "1.0.0".to_string(),
-                size: fs::metadata(&path)?.len(),
-                created_at: chrono::Utc::now(),
-            };
+            // Add file to staging
+            let hash = fai.add_file(&path)?;
             
-            // Store metadata
-            storage.store_metadata(&metadata)?;
-            
-            println!("Added model {} with hash: {}", model_name, hash);
+            println!("Added {} ({})", path, &hash[..8]);
         }
         Commands::Commit { message } => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
             println!("Committing with message: {}", message);
             // TODO: Implement commit functionality
+            println!("Commit functionality not yet implemented");
         }
         Commands::Status => {
-            println!("Repository status:");
-            // TODO: Implement status display
-        }
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            // Initialize FAI protocol
+            let fai = FaiProtocol::new()?;
+            
+            // Get staged files
+            let staged_files = fai.get_status()?;
+            
+            if staged_files.is_empty() {
+                println!("No changes staged for commit");
+            } else {
+                println!("Changes to be committed:");
+                println!();
+                for (file_path, file_hash, file_size) in staged_files {
+                    println!("  {} ({} - {} bytes)", file_path, &file_hash[..8], file_size);
+                }
+            }
     }
 
     Ok(())
