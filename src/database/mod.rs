@@ -337,6 +337,8 @@ mod tests {
         
         // Test HEAD updated
         let head = db.get_head().unwrap();
+        println!("Debug: HEAD = {:?}", head);
+        println!("Debug: Expected = {}", Some("commit2".to_string()));
         assert_eq!(head, Some("commit2".to_string()));
         
         // Test commit history
