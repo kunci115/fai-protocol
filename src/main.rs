@@ -40,6 +40,8 @@ enum Commands {
         /// Hash of the data to fetch
         hash: String,
     },
+    /// Start server to serve chunks to other peers
+    Serve,
 }
 
 #[tokio::main]
@@ -266,6 +268,42 @@ async fn main() -> Result<()> {
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to fetch chunk: {}", e));
                 }
+            }
+        }
+        Commands::Serve => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            println!("FAI server starting...");
+            
+            // Create network manager
+            let mut network_manager = match fai_protocol::network::NetworkManager::new() {
+                Ok(nm) => nm,
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                }
+            };
+            
+            // Start the network manager
+            if let Err(e) = network_manager.start() {
+                return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
+            }
+            
+            println!("FAI server started");
+            println!("Local peer ID: {}", network_manager.local_peer_id());
+            println!("Ready to serve chunks...");
+            println!("Press Ctrl+C to stop");
+            
+            // Run event loop indefinitely
+            loop {
+                if let Err(e) = network_manager.poll_events().await {
+                    eprintln!("Error during event polling: {}", e);
+                }
+                
+                // Small delay to prevent busy-waiting
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
         }
     }
