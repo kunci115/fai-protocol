@@ -149,7 +149,10 @@ done
 if kill -0 $FETCH_PID 2>/dev/null; then
     print_error "Fetch timed out after $TIMEOUT seconds"
     kill $FETCH_PID 2>/dev/null || true
+    echo -e "\n${RED}=== FETCH LOG ===${NC}"
     cat "$FETCH_LOG"
+    echo -e "\n${RED}=== SERVER LOG ===${NC}"
+    cat "$SERVE_LOG"
     exit 1
 fi
 
@@ -159,9 +162,18 @@ print_step "Step 7: Verifying file transfer"
 # Check if fetch was successful
 if [ $FETCH_EXIT_CODE -ne 0 ]; then
     print_error "Fetch command failed with exit code $FETCH_EXIT_CODE"
+    echo -e "\n${RED}=== FETCH LOG ===${NC}"
     cat "$FETCH_LOG"
+    echo -e "\n${RED}=== SERVER LOG ===${NC}"
+    cat "$SERVE_LOG"
     exit 1
 fi
+
+# Always show logs for debugging
+echo -e "\n${YELLOW}=== FETCH LOG ===${NC}"
+cat "$FETCH_LOG"
+echo -e "\n${YELLOW}=== SERVER LOG ===${NC}"
+cat "$SERVE_LOG"
 
 # Check if fetched file exists
 FETCHED_FILE="fetched_${FILE_HASH:0:8}.dat"
