@@ -7,6 +7,7 @@ use libp2p::{
     Swarm, SwarmBuilder,
     identity::Keypair,
     mdns,
+    yamux,
     Multiaddr,
     PeerId,
     swarm::{NetworkBehaviour, SwarmEvent},
