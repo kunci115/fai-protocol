@@ -16,6 +16,11 @@ impl FaiProtocol {
         let storage = storage::StorageManager::new(std::path::PathBuf::from(".fai"))?;
         Ok(Self { storage })
     }
+
+    /// Get reference to the storage manager
+    pub fn storage(&self) -> &storage::StorageManager {
+        &self.storage
+    }
 }
 
 /// Re-export commonly used types

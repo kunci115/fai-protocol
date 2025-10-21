@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::fs;
 use blake3::Hasher;
 use serde::{Deserialize, Serialize};
+use rusqlite::Connection;
 
 /// Metadata for a stored AI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +28,8 @@ pub struct ModelMetadata {
 pub struct StorageManager {
     /// Root path to .fai directory
     root_path: PathBuf,
+    /// SQLite database connection for metadata
+    db: Connection,
 }
 
 impl StorageManager {
@@ -35,7 +38,20 @@ impl StorageManager {
         // Ensure the .fai directory exists
         fs::create_dir_all(&root)?;
         
-        Ok(Self { root_path: root })
+        // Initialize metadata database
+        let db = Connection::open(root.join("metadata.db"))?;
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS models (
+                hash TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                version TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+        
+        Ok(Self { root_path: root, db })
     }
 
     /// Store data and return its content hash
@@ -111,6 +127,53 @@ impl StorageManager {
         let object_path = self.root_path.join("objects").join(prefix).join(suffix);
         
         object_path.exists()
+    }
+
+    /// Store metadata for a model
+    /// 
+    /// # Arguments
+    /// * `metadata` - The metadata to store
+    /// 
+    /// # Returns
+    /// Ok(()) if successful, Err otherwise
+    pub fn store_metadata(&self, metadata: &ModelMetadata) -> Result<()> {
+        self.db.execute(
+            "INSERT OR REPLACE INTO models (hash, name, version, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            [
+                &metadata.hash,
+                &metadata.name,
+                &metadata.version,
+                &metadata.size.to_string(),
+                &metadata.created_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Retrieve metadata for a model
+    /// 
+    /// # Arguments
+    /// * `hash` - The BLAKE3 hash of the model
+    /// 
+    /// # Returns
+    /// The metadata if found, None otherwise
+    pub fn get_metadata(&self, hash: &str) -> Result<Option<ModelMetadata>> {
+        let mut stmt = self.db.prepare(
+            "SELECT hash, name, version, size, created_at FROM models WHERE hash = ?1"
+        )?;
+        
+        let mut rows = stmt.query([hash])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(ModelMetadata {
+                hash: row.get(0)?,
+                name: row.get(1)?,
+                version: row.get(2)?,
+                size: row.get(3)?,
+                created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)?.with_timezone(&chrono::Utc),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 
