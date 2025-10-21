@@ -1,0 +1,20 @@
+[package]
+name = "fai-protocol"
+version = "0.1.0"
+edition = "2021"
+authors = ["FAI Protocol Team"]
+description = "A decentralized version control system for AI models"
+license = "MIT"
+repository = "https://github.com/fai-protocol/fai-protocol"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+blake3 = "1.5"
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+rusqlite = { version = "0.30", features = ["bundled"] }
+anyhow = "1.0"
+
+[[bin]]
+name = "fai"
+path = "src/main.rs"
