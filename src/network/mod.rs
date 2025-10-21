@@ -315,7 +315,7 @@ impl NetworkManager {
         let connected_peers = self.swarm.connected_peers().collect::<Vec<_>>();
         println!("DEBUG: Currently connected to {} peers: {:?}", connected_peers.len(), connected_peers);
         
-        if !connected_peers.iter().any(|p| *p == peer) {
+        if !connected_peers.iter().any(|p| p == &peer) {
             println!("DEBUG: Peer {} is not connected, attempting to dial", peer);
             // Try to find addresses for this peer
             if let Some(peer_info) = self.discovered_peers.get(&peer) {
@@ -335,7 +335,7 @@ impl NetworkManager {
             // Wait a bit for connection to establish
             for _ in 0..50 {
                 let current_peers = self.swarm.connected_peers().collect::<Vec<_>>();
-                if current_peers.iter().any(|p| *p == peer) {
+                if current_peers.iter().any(|p| p == &peer) {
                     println!("DEBUG: Successfully connected to peer {}", peer);
                     break;
                 }
