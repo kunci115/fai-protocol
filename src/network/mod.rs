@@ -105,8 +105,7 @@ impl NetworkManager {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
                 [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
-                libp2p::request_response::Config::default()
-                    .with_keep_alive(libp2p::swarm::keep_alive::KeepAlive::Yes),
+                libp2p::request_response::Config::default(),
             ),
         };
 
@@ -239,20 +238,26 @@ impl NetworkManager {
                                 request_id, response.hash, 
                                 response.data.as_ref().map(|d| d.len()).unwrap_or(0));
                         }
-                        libp2p::request_response::Message::OutboundFailure { 
-                            request_id, 
-                            error, 
-                            ..
-                        } => {
-                            println!("DEBUG: Outbound request failed: request_id={:?}, error={:?}", request_id, error);
-                        }
-                        libp2p::request_response::Message::InboundFailure { 
-                            request_id, 
-                            error, 
-                            ..
-                        } => {
-                            println!("DEBUG: Inbound request failed: request_id={:?}, error={:?}", request_id, error);
-                        }
+                        _ => {}
+                    }
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::OutboundFailure { 
+                        request_id, 
+                        peer: failure_peer, 
+                        error 
+                    }
+                )) => {
+                    println!("DEBUG: Outbound request failed: request_id={:?}, peer={:?}, error={:?}", request_id, failure_peer, error);
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::InboundFailure { 
+                        request_id, 
+                        peer: failure_peer, 
+                        error 
+                    }
+                )) => {
+                    println!("DEBUG: Inbound request failed: request_id={:?}, peer={:?}, error={:?}", request_id, failure_peer, error);
                     }
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
@@ -401,14 +406,18 @@ impl NetworkManager {
                         } => {
                             println!("DEBUG: Received non-matching response for request {:?}: hash={}", response_id, response.hash);
                         }
-                        libp2p::request_response::Message::OutboundFailure { 
-                            request_id: response_id, 
-                            error, 
-                            ..
-                        } if response_id == request_id => {
-                            println!("DEBUG: Our request failed: request_id={:?}, error={:?}", request_id, error);
-                            return Ok(None);
-                        }
+                        _ => {}
+                    }
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::OutboundFailure { 
+                        request_id: response_id, 
+                        peer: _, 
+                        error 
+                    }
+                )) if response_id == request_id => {
+                    println!("DEBUG: Our request failed: request_id={:?}, error={:?}", request_id, error);
+                    return Ok(None);
                         _ => {}
                     }
                 }
