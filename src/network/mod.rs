@@ -172,7 +172,7 @@ impl NetworkManager {
                     }
                 }
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::Request { 
+                    libp2p::request_response::Event::InboundRequest { 
                         peer, 
                         request_id, 
                         request 
@@ -268,15 +268,22 @@ impl NetworkManager {
         while let Some(event) = self.swarm.next().await {
             match event {
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::Response { request_id: response_id, response }
+                    libp2p::request_response::Event::Response { 
+                        request_id: response_id, 
+                        response 
+                    }
                 )) if response_id == request_id => {
                     println!("Received chunk response for hash: {}", response.hash);
                     return Ok(response.data);
                 }
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::OutboundRequestTimeout { .. }
-                )) => {
-                    println!("Request timeout for hash: {}", hash);
+                    libp2p::request_response::Event::OutboundFailure { 
+                        peer, 
+                        request_id, 
+                        error 
+                    }
+                )) if request_id == request_id => {
+                    println!("Request failed for hash: {} (error: {:?})", hash, error);
                     return Ok(None);
                 }
                 _ => {
