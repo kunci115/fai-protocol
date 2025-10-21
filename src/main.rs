@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
+use std::fs;
+use std::path::Path;
+use fai_protocol::storage::{StorageManager, ModelMetadata};
 
 #[derive(Parser)]
 #[command(name = "fai")]
@@ -29,11 +32,47 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Init => {
             println!("Initializing FAI repository...");
-            // TODO: Implement repository initialization
+            
+            // Create .fai directory structure
+            fs::create_dir_all(".fai/objects")?;
+            fs::create_dir_all(".fai/refs")?;
+            
+            // Initialize storage manager (this creates the database)
+            let _storage = StorageManager::new()?;
+            
+            println!("Initialized FAI repository in .fai/");
         }
         Commands::Add { path } => {
             println!("Adding model: {}", path);
-            // TODO: Implement model addition
+            
+            // Check if file exists
+            if !Path::new(&path).exists() {
+                return Err(anyhow::anyhow!("File not found: {}", path));
+            }
+            
+            // Initialize storage and store the model
+            let storage = StorageManager::new()?;
+            let hash = storage.store(&path)?;
+            
+            // Extract model name from path
+            let model_name = Path::new(&path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown");
+            
+            // Create metadata
+            let metadata = ModelMetadata {
+                hash: hash.clone(),
+                name: model_name.to_string(),
+                version: "1.0.0".to_string(),
+                size: fs::metadata(&path)?.len(),
+                created_at: chrono::Utc::now(),
+            };
+            
+            // Store metadata
+            storage.store_metadata(&metadata)?;
+            
+            println!("Added model {} with hash: {}", model_name, hash);
         }
         Commands::Commit { message } => {
             println!("Committing with message: {}", message);
