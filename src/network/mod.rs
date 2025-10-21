@@ -178,7 +178,7 @@ impl NetworkManager {
                     }
                 )) => {
                     if let libp2p::request_response::Message::Request { 
-                        request: _, 
+                        request, 
                         channel, 
                         .. 
                     } = message {
@@ -274,7 +274,7 @@ impl NetworkManager {
             match event {
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
                     libp2p::request_response::Event::Message { 
-                        peer: response_peer, 
+                        peer: _response_peer, 
                         message 
                     }
                 )) => {
