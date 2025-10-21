@@ -7,15 +7,10 @@ use libp2p::{
     Swarm, SwarmBuilder,
     identity::Keypair,
     mdns,
-    tcp,
-    noise,
-    yamux,
     Multiaddr,
     PeerId,
     swarm::{NetworkBehaviour, SwarmEvent},
-    request_response::{self, ProtocolSupport, RequestResponse, RequestResponseConfig, Behaviour},
 };
-use libp2p::swarm::TransportExt;
 use std::{
     collections::HashMap,
     time::SystemTime,
@@ -32,136 +27,23 @@ pub struct PeerInfo {
     pub last_seen: SystemTime,
 }
 
-/// Custom network behavior combining mDNS discovery and request-response
+/// Simple network behavior for peer discovery
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "FAIComposedEvent")]
+#[behaviour(out_event = "FAIEvent")]
 pub struct FAIBehaviour {
     /// mDNS for local peer discovery
     mdns: mdns::tokio::Behaviour,
-    /// Request-response protocol for model sharing
-    request_response: RequestResponse<FAIProtocolCodec>,
 }
 
-/// Event type for composed behavior
+/// Network events
 #[derive(Debug)]
-pub enum FAIComposedEvent {
+pub enum FAIEvent {
     Mdns(mdns::Event),
-    RequestResponse(request_response::Event<FAIProtocolRequest, FAIProtocolResponse>),
 }
 
-impl From<mdns::Event> for FAIComposedEvent {
+impl From<mdns::Event> for FAIEvent {
     fn from(event: mdns::Event) -> Self {
-        FAIComposedEvent::Mdns(event)
-    }
-}
-
-impl From<request_response::Event<FAIProtocolRequest, FAIProtocolResponse>> for FAIComposedEvent {
-    fn from(event: request_response::Event<FAIProtocolRequest, FAIProtocolResponse>) -> Self {
-        FAIComposedEvent::RequestResponse(event)
-    }
-}
-
-/// Protocol codec for FAI Protocol requests/responses using JSON
-#[derive(Debug, Clone, Default)]
-pub struct FAIProtocolCodec;
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct FAIProtocolRequest {
-    /// Request type (e.g., "get_model", "list_models")
-    pub request_type: String,
-    /// Request data (e.g., model hash)
-    pub data: Vec<u8>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct FAIProtocolResponse {
-    /// Response data
-    pub data: Vec<u8>,
-    /// Success status
-    pub success: bool,
-}
-
-#[async_trait::async_trait]
-impl request_response::Codec for FAIProtocolCodec {
-    type Protocol = &'static str;
-    type Request = FAIProtocolRequest;
-    type Response = FAIProtocolResponse;
-
-    async fn read_request<T>(&mut self, protocol: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Request>
-    where
-        T: futures::AsyncRead + Unpin + Send
-    {
-        // Use a simple approach: read length prefix, then read JSON
-        use futures::AsyncReadExt;
-        
-        // Read length prefix (4 bytes)
-        let mut len_bytes = [0u8; 4];
-        io.read_exact(&mut len_bytes).await?;
-        let len = u32::from_be_bytes(len_bytes) as usize;
-        
-        // Read JSON data
-        let mut buffer = vec![0u8; len];
-        io.read_exact(&mut buffer).await?;
-        
-        // Deserialize JSON
-        serde_json::from_slice(&buffer)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-    }
-
-    async fn read_response<T>(&mut self, protocol: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Response>
-    where
-        T: futures::AsyncRead + Unpin + Send
-    {
-        // Use same approach as read_request
-        use futures::AsyncReadExt;
-        
-        let mut len_bytes = [0u8; 4];
-        io.read_exact(&mut len_bytes).await?;
-        let len = u32::from_be_bytes(len_bytes) as usize;
-        
-        let mut buffer = vec![0u8; len];
-        io.read_exact(&mut buffer).await?;
-        
-        serde_json::from_slice(&buffer)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-    }
-
-    async fn write_request<T>(&mut self, protocol: &Self::Protocol, io: &mut T, req: Self::Request) -> std::io::Result<()>
-    where
-        T: futures::AsyncWrite + Unpin + Send
-    {
-        use futures::AsyncWriteExt;
-        
-        // Serialize to JSON
-        let json_data = serde_json::to_vec(&req)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        
-        // Write length prefix
-        let len = json_data.len() as u32;
-        io.write_all(&len.to_be_bytes()).await?;
-        
-        // Write JSON data
-        io.write_all(&json_data).await?;
-        io.flush().await?;
-        
-        Ok(())
-    }
-
-    async fn write_response<T>(&mut self, protocol: &Self::Protocol, io: &mut T, res: Self::Response) -> std::io::Result<()>
-    where
-        T: futures::AsyncWrite + Unpin + Send
-    {
-        use futures::AsyncWriteExt;
-        
-        let json_data = serde_json::to_vec(&res)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        
-        let len = json_data.len() as u32;
-        io.write_all(&len.to_be_bytes()).await?;
-        io.write_all(&json_data).await?;
-        io.flush().await?;
-        
-        Ok(())
+        FAIEvent::Mdns(event)
     }
 }
 
@@ -179,20 +61,16 @@ impl NetworkManager {
     /// # Returns
     /// A new NetworkManager instance with configured libp2p stack
     pub fn new() -> Result<Self> {
-        // Generate or load identity
+        // Generate identity
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        // Create behavior
+        // Create behavior with just mDNS
         let behaviour = FAIBehaviour {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
-            request_response: RequestResponse::new(
-                [(b"/fai-protocol/1.0.0", ProtocolSupport::Full)],
-                RequestResponseConfig::default(),
-            ),
         };
 
-        // Create swarm using the new builder pattern
+        // Create swarm using the new builder pattern with TCP transport
         let swarm = SwarmBuilder::with_existing_identity(local_key)
             .with_tokio()
             .with_tcp(
@@ -232,7 +110,7 @@ impl NetworkManager {
         
         if let Some(event) = self.swarm.next().await {
             match event {
-                SwarmEvent::Behaviour(FAIComposedEvent::Mdns(mdns::Event::Discovered(list))) => {
+                SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
                     for (peer_id, addr) in list {
                         println!("Discovered peer {} at {}", peer_id, addr);
                         
@@ -255,15 +133,11 @@ impl NetworkManager {
                         }
                     }
                 }
-                SwarmEvent::Behaviour(FAIComposedEvent::Mdns(mdns::Event::Expired(list))) => {
+                SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Expired(list))) => {
                     for (peer_id, _addr) in list {
                         println!("Peer {} expired", peer_id);
                         self.discovered_peers.remove(&peer_id);
                     }
-                }
-                SwarmEvent::Behaviour(FAIComposedEvent::RequestResponse(event)) => {
-                    println!("Request-Response event: {:?}", event);
-                    // TODO: Handle request-response events
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
