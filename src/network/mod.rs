@@ -11,7 +11,9 @@ use libp2p::{
     Multiaddr,
     PeerId,
     swarm::{NetworkBehaviour, SwarmEvent},
+    request_response::{self, ProtocolSupport},
 };
+use serde::{Serialize, Deserialize};
 use std::{
     collections::HashMap,
     time::SystemTime,
@@ -28,23 +30,48 @@ pub struct PeerInfo {
     pub last_seen: SystemTime,
 }
 
-/// Simple network behavior for peer discovery
+/// Request for a chunk of data from a peer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkRequest {
+    /// The file hash to request
+    pub hash: String,
+}
+
+/// Response containing the requested chunk data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkResponse {
+    /// The file hash this response is for
+    pub hash: String,
+    /// The data if found, None if not found
+    pub data: Option<Vec<u8>>,
+}
+
+/// Simple network behavior for peer discovery and chunk requests
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "FAIEvent")]
 pub struct FAIBehaviour {
     /// mDNS for local peer discovery
     mdns: mdns::tokio::Behaviour,
+    /// Request-response protocol for chunk requests
+    request_response: libp2p::request_response::cbor::Behaviour<ChunkRequest, ChunkResponse>,
 }
 
 /// Network events
 #[derive(Debug)]
 pub enum FAIEvent {
     Mdns(mdns::Event),
+    RequestResponse(libp2p::request_response::Event<ChunkRequest, ChunkResponse>),
 }
 
 impl From<mdns::Event> for FAIEvent {
     fn from(event: mdns::Event) -> Self {
         FAIEvent::Mdns(event)
+    }
+}
+
+impl From<libp2p::request_response::Event<ChunkRequest, ChunkResponse>> for FAIEvent {
+    fn from(event: libp2p::request_response::Event<ChunkRequest, ChunkResponse>) -> Self {
+        FAIEvent::RequestResponse(event)
     }
 }
 
@@ -66,9 +93,13 @@ impl NetworkManager {
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        // Create behavior with just mDNS
+        // Create behavior with mDNS and chunk request/response
         let behaviour = FAIBehaviour {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
+            request_response: libp2p::request_response::cbor::Behaviour::new(
+                [("/fai/chunk/1.0.0", ProtocolSupport::Full)],
+                libp2p::request_response::Config::default(),
+            ),
         };
 
         // Create swarm using the new builder pattern with TCP transport
@@ -140,6 +171,29 @@ impl NetworkManager {
                         self.discovered_peers.remove(&peer_id);
                     }
                 }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::Request { 
+                        peer, 
+                        request_id, 
+                        request 
+                    }
+                )) => {
+                    println!("Received chunk request from {} for hash: {}", peer, request.hash);
+                    
+                    // Check if we have the data (this would need access to storage)
+                    // For now, we'll respond with None (not found)
+                    let response = ChunkResponse {
+                        hash: request.hash.clone(),
+                        data: None, // TODO: Check storage manager for the data
+                    };
+                    
+                    if let Err(e) = self.swarm.behaviour_mut().request_response.send_response(
+                        request_id,
+                        response
+                    ) {
+                        eprintln!("Failed to send response: {}", e);
+                    }
+                }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
                 }
@@ -191,5 +245,54 @@ impl NetworkManager {
         println!("Attempting to connect to {}", addr);
         self.swarm.dial(addr)?;
         Ok(())
+    }
+
+    /// Request a chunk of data from a peer
+    /// 
+    /// # Arguments
+    /// * `peer` - The peer to request from
+    /// * `hash` - The hash of the data to request
+    /// 
+    /// # Returns
+    /// The data if found, None if not found
+    pub async fn request_chunk(&mut self, peer: PeerId, hash: &str) -> Result<Option<Vec<u8>>> {
+        let request_id = self.swarm.behaviour_mut().request_response.send_request(
+            &peer,
+            ChunkRequest { hash: hash.to_string() },
+        )?;
+        
+        println!("Sent chunk request {} to peer {}", hash, peer);
+        
+        // Wait for response
+        use futures::StreamExt;
+        while let Some(event) = self.swarm.next().await {
+            match event {
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::Response { request_id: response_id, response }
+                )) if response_id == request_id => {
+                    println!("Received chunk response for hash: {}", response.hash);
+                    return Ok(response.data);
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::OutboundRequestTimeout { .. }
+                )) => {
+                    println!("Request timeout for hash: {}", hash);
+                    return Ok(None);
+                }
+                _ => {
+                    // Handle other events
+                    if let SwarmEvent::Behaviour(FAIEvent::Mdns(event)) = event {
+                        if let mdns::Event::Discovered(list) = event {
+                            for (peer_id, addr) in list {
+                                println!("Discovered peer {} at {}", peer_id, addr);
+                                self.swarm.dial(addr)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
     }
 }
