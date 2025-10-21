@@ -134,6 +134,10 @@ echo "Fetching chunk $FILE_HASH from peer $SERVER_PEER_ID..."
 timeout $TIMEOUT cargo run -- fetch "$SERVER_PEER_ID" "$FILE_HASH" > "$FETCH_LOG" 2>&1 &
 FETCH_PID=$!
 
+# Show fetch command output as it happens
+tail -f "$FETCH_LOG" &
+TAIL_PID=$!
+
 # Wait for fetch to complete or timeout
 for i in $(seq 1 $((TIMEOUT * 10))); do
     if ! kill -0 $FETCH_PID 2>/dev/null; then
@@ -144,6 +148,9 @@ for i in $(seq 1 $((TIMEOUT * 10))); do
     fi
     sleep 0.1
 done
+
+# Stop tailing
+kill $TAIL_PID 2>/dev/null || true
 
 # Check if fetch is still running (timeout)
 if kill -0 $FETCH_PID 2>/dev/null; then
