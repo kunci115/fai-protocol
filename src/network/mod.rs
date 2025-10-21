@@ -13,8 +13,9 @@ use libp2p::{
     Multiaddr,
     PeerId,
     swarm::{NetworkBehaviour, SwarmEvent},
-    request_response::{self, ProtocolSupport, RequestResponse, RequestResponseConfig},
+    request_response::{self, ProtocolSupport, RequestResponse, RequestResponseConfig, Behaviour},
 };
+use libp2p::swarm::TransportExt;
 use std::{
     collections::HashMap,
     time::SystemTime,
@@ -182,27 +183,25 @@ impl NetworkManager {
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        // Build transport with TCP and Noise encryption
-        let transport = tcp::tokio::Transport::default()
-            .upgrade(noise::Config::new(&local_key)?)
-            .upgrade(yamux::Config::default())
-            .boxed();
-
         // Create behavior
-        let behaviour = {
-            let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?;
-            let request_response = RequestResponse::new(
+        let behaviour = FAIBehaviour {
+            mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
+            request_response: RequestResponse::new(
                 [(b"/fai-protocol/1.0.0", ProtocolSupport::Full)],
-                request_response::Config::default(),
-            );
-            FAIBehaviour {
-                mdns,
-                request_response,
-            }
+                RequestResponseConfig::default(),
+            ),
         };
 
-        // Create swarm
-        let swarm = SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id).build();
+        // Create swarm using the new builder pattern
+        let swarm = SwarmBuilder::with_existing_identity(local_key)
+            .with_tokio()
+            .with_tcp(
+                libp2p::tcp::Config::default(),
+                libp2p::noise::Config::new,
+                yamux::Config::default,
+            )?
+            .with_behaviour(|_| behaviour)?
+            .build();
 
         Ok(Self {
             swarm,
