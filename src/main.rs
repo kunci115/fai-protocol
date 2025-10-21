@@ -19,7 +19,11 @@ enum Commands {
     /// Add a model file to the repository
     Add { path: String },
     /// Commit changes with a message
-    Commit { message: String },
+    Commit { 
+        /// Commit message
+        #[arg(short, long)]
+        message: String 
+    },
     /// Show repository status
     Status,
     /// Show commit history
