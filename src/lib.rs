@@ -69,14 +69,19 @@ impl FaiProtocol {
         // Read file content
         let content = std::fs::read(file_path)?;
         
-        // Store in storage manager
+        // Store in storage manager FIRST (this actually writes to .fai/objects/)
         let hash = self.storage.store(&content)?;
         
         // Get file size
         let size = std::fs::metadata(file_path)?.len();
         
-        // Add to staging area
+        // THEN add to staging area with the hash returned by storage
         self.database.add_to_staging(file_path, &hash, size)?;
+        
+        // Debug: verify the file was actually stored
+        if !self.storage.exists(&hash) {
+            return Err(anyhow::anyhow!("Failed to store file: {} with hash: {}", file_path, hash));
+        }
         
         Ok(hash)
     }
