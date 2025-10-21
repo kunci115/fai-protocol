@@ -2,10 +2,10 @@
 //! 
 //! Handles peer-to-peer networking for decentralized model sharing.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use libp2p::{
     Swarm, SwarmBuilder,
-    identity::{Keypair, ed25519},
+    identity::Keypair,
     mdns,
     tcp,
     noise,
@@ -60,11 +60,11 @@ impl From<request_response::Event<FAIProtocolRequest, FAIProtocolResponse>> for 
     }
 }
 
-/// Protocol codec for FAI Protocol requests/responses
-#[derive(Debug, Clone)]
+/// Protocol codec for FAI Protocol requests/responses using JSON
+#[derive(Debug, Clone, Default)]
 pub struct FAIProtocolCodec;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FAIProtocolRequest {
     /// Request type (e.g., "get_model", "list_models")
     pub request_type: String,
@@ -72,7 +72,7 @@ pub struct FAIProtocolRequest {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FAIProtocolResponse {
     /// Response data
     pub data: Vec<u8>,
@@ -80,41 +80,87 @@ pub struct FAIProtocolResponse {
     pub success: bool,
 }
 
+#[async_trait::async_trait]
 impl request_response::Codec for FAIProtocolCodec {
     type Protocol = &'static str;
     type Request = FAIProtocolRequest;
     type Response = FAIProtocolResponse;
 
-    async fn read_request<T>(&mut self, _: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Request>
+    async fn read_request<T>(&mut self, protocol: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Request>
     where
         T: futures::AsyncRead + Unpin + Send
     {
-        // Simple implementation - in production, use proper serialization
-        todo!("Implement request reading")
+        // Use a simple approach: read length prefix, then read JSON
+        use futures::AsyncReadExt;
+        
+        // Read length prefix (4 bytes)
+        let mut len_bytes = [0u8; 4];
+        io.read_exact(&mut len_bytes).await?;
+        let len = u32::from_be_bytes(len_bytes) as usize;
+        
+        // Read JSON data
+        let mut buffer = vec![0u8; len];
+        io.read_exact(&mut buffer).await?;
+        
+        // Deserialize JSON
+        serde_json::from_slice(&buffer)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    async fn read_response<T>(&mut self, _: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Response>
+    async fn read_response<T>(&mut self, protocol: &Self::Protocol, io: &mut T) -> std::io::Result<Self::Response>
     where
         T: futures::AsyncRead + Unpin + Send
     {
-        // Simple implementation - in production, use proper serialization
-        todo!("Implement response reading")
+        // Use same approach as read_request
+        use futures::AsyncReadExt;
+        
+        let mut len_bytes = [0u8; 4];
+        io.read_exact(&mut len_bytes).await?;
+        let len = u32::from_be_bytes(len_bytes) as usize;
+        
+        let mut buffer = vec![0u8; len];
+        io.read_exact(&mut buffer).await?;
+        
+        serde_json::from_slice(&buffer)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    async fn write_request<T>(&mut self, _: &Self::Protocol, io: &mut T, req: Self::Request) -> std::io::Result<()>
+    async fn write_request<T>(&mut self, protocol: &Self::Protocol, io: &mut T, req: Self::Request) -> std::io::Result<()>
     where
         T: futures::AsyncWrite + Unpin + Send
     {
-        // Simple implementation - in production, use proper serialization
-        todo!("Implement request writing")
+        use futures::AsyncWriteExt;
+        
+        // Serialize to JSON
+        let json_data = serde_json::to_vec(&req)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        
+        // Write length prefix
+        let len = json_data.len() as u32;
+        io.write_all(&len.to_be_bytes()).await?;
+        
+        // Write JSON data
+        io.write_all(&json_data).await?;
+        io.flush().await?;
+        
+        Ok(())
     }
 
-    async fn write_response<T>(&mut self, _: &Self::Protocol, io: &mut T, res: Self::Response) -> std::io::Result<()>
+    async fn write_response<T>(&mut self, protocol: &Self::Protocol, io: &mut T, res: Self::Response) -> std::io::Result<()>
     where
         T: futures::AsyncWrite + Unpin + Send
     {
-        // Simple implementation - in production, use proper serialization
-        todo!("Implement response writing")
+        use futures::AsyncWriteExt;
+        
+        let json_data = serde_json::to_vec(&res)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        
+        let len = json_data.len() as u32;
+        io.write_all(&len.to_be_bytes()).await?;
+        io.write_all(&json_data).await?;
+        io.flush().await?;
+        
+        Ok(())
     }
 }
 

@@ -12,11 +12,12 @@ clap = { version = "4.4", features = ["derive"] }
 blake3 = "1.5"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 rusqlite = { version = "0.30", features = ["bundled"] }
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 tempfile = "3.8"
-libp2p = { version = "0.54", features = ["tokio", "tcp", "mdns", "noise", "yamux", "macros"] }
+libp2p = { version = "0.54", features = ["tokio", "tcp", "mdns", "noise", "yamux", "macros", "request-response"] }
 futures = "0.3"
 async-trait = "0.1"
 
