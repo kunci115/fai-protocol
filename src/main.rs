@@ -254,7 +254,15 @@ async fn main() -> Result<()> {
             
             // Check if target peer was discovered
             let peers = network_manager.list_peers();
+            println!("DEBUG: Discovery complete");
+            println!("DEBUG: Discovered {} peers", peers.len());
+            for peer in &peers {
+                println!("DEBUG: Peer: {}", peer.peer_id);
+            }
+            
+            println!("DEBUG: Looking for target peer: {}", target_peer);
             let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
+            println!("DEBUG: Target peer found: {}", target_peer_found);
             
             if !target_peer_found {
                 println!("Discovered {} peers, but target peer {} not found", peers.len(), peer_id);
