@@ -258,7 +258,6 @@ impl NetworkManager {
                     }
                 )) => {
                     println!("DEBUG: Inbound request failed: request_id={:?}, peer={:?}, error={:?}", request_id, failure_peer, error);
-                    }
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
@@ -268,24 +267,6 @@ impl NetworkManager {
                 }
                 SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                     println!("DEBUG: Connection closed to {} (reason: {:?})", peer_id, cause);
-                }
-                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::InboundFailure { 
-                        peer, 
-                        request_id, 
-                        error 
-                    }
-                )) => {
-                    println!("DEBUG: Inbound request failed from {} (id: {:?}, error: {:?})", peer, request_id, error);
-                }
-                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::ResponseSent { 
-                        request_id, 
-                        peer, 
-                        ..
-                    }
-                )) => {
-                    println!("DEBUG: Response sent to {} for request {:?}", peer, request_id);
                 }
                 _ => {}
             }
@@ -406,18 +387,6 @@ impl NetworkManager {
                         } => {
                             println!("DEBUG: Received non-matching response for request {:?}: hash={}", response_id, response.hash);
                         }
-                        _ => {}
-                    }
-                }
-                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::OutboundFailure { 
-                        request_id: response_id, 
-                        peer: _, 
-                        error 
-                    }
-                )) if response_id == request_id => {
-                    println!("DEBUG: Our request failed: request_id={:?}, error={:?}", request_id, error);
-                    return Ok(None);
                         _ => {}
                     }
                 }
