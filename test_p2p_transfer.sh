@@ -130,23 +130,22 @@ sleep 2
 print_step "Step 6: Testing P2P transfer"
 echo "Fetching chunk $FILE_HASH from peer $SERVER_PEER_ID..."
 
-# Start fetch in background with timeout
-timeout $TIMEOUT cargo run -- fetch "$SERVER_PEER_ID" "$FILE_HASH" > "$FETCH_LOG" 2>&1 &
+# Start fetch in background
+cargo run -- fetch "$SERVER_PEER_ID" "$FILE_HASH" > "$FETCH_LOG" 2>&1 &
 FETCH_PID=$!
 
 # Show fetch command output as it happens
 tail -f "$FETCH_LOG" &
 TAIL_PID=$!
 
-# Wait for fetch to complete or timeout
-for i in $(seq 1 $((TIMEOUT * 10))); do
+# Wait for fetch to complete with timeout using bash
+for i in $(seq 1 $TIMEOUT); do
     if ! kill -0 $FETCH_PID 2>/dev/null; then
-        # Fetch process has finished
         wait $FETCH_PID
         FETCH_EXIT_CODE=$?
         break
     fi
-    sleep 0.1
+    sleep 1
 done
 
 # Stop tailing
@@ -156,6 +155,8 @@ kill $TAIL_PID 2>/dev/null || true
 if kill -0 $FETCH_PID 2>/dev/null; then
     print_error "Fetch timed out after $TIMEOUT seconds"
     kill $FETCH_PID 2>/dev/null || true
+    wait $FETCH_PID 2>/dev/null || true
+    FETCH_EXIT_CODE=124  # timeout exit code
     echo ""
     echo "=== Server Log ==="
     cat "$SERVE_LOG"
