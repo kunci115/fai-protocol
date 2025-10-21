@@ -245,12 +245,28 @@ else
 fi
 
 # Check if we have at least one file and the total storage size is reasonable
-total_size=$(du -sb .fai/objects | cut -f1)
-if [ "$total_size" -gt 1000000 ]; then  # At least 1MB total
-    print_success "Large file stored correctly (total: $((total_size/1024/1024))MB)"
+# Use cross-compatible approach to calculate total bytes
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: use find to sum file sizes
+    total_size=$(find .fai/objects -type f -exec stat -f%z {} + | awk '{sum += $1} END {print sum}')
 else
-    print_error "Large file not stored correctly (total: ${total_size} bytes)"
-    print_info "Expected at least 10MB, got ${total_size} bytes"
+    # Linux: use du -sb
+    total_size=$(du -sb .fai/objects | cut -f1)
+fi
+
+# Validate we got a numeric result
+if [[ "$total_size" =~ ^[0-9]+$ ]]; then
+    total_mb=$((total_size / 1024 / 1024))
+    if [ "$total_size" -gt 1000000 ]; then  # At least 1MB total
+        print_success "Large file stored correctly (total: ${total_mb}MB)"
+    else
+        print_error "Large file not stored correctly (total: ${total_size} bytes)"
+        print_info "Expected at least 10MB, got ${total_size} bytes"
+        exit 1
+    fi
+else
+    print_error "Failed to calculate total storage size"
+    print_info "Got: ${total_size}"
     exit 1
 fi
 
