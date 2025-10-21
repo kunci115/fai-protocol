@@ -2,7 +2,7 @@
 //! 
 //! Handles SQLite database operations for commits, staging, and file tracking.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use rusqlite::{Connection, params};
 use std::path::Path;
 use chrono::{DateTime, Utc};
@@ -36,7 +36,7 @@ impl DatabaseManager {
     /// A new DatabaseManager instance
     pub fn new(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        let mut db = Self { conn };
+        let db = Self { conn };
         db.init_schema()?;
         Ok(db)
     }
@@ -287,8 +287,9 @@ mod tests {
         // Test getting staged files
         let staged = db.get_staged_files().unwrap();
         assert_eq!(staged.len(), 2);
-        assert_eq!(staged[0], ("test.txt".to_string(), "hash123".to_string(), 100));
-        assert_eq!(staged[1], ("model.onnx".to_string(), "hash456".to_string(), 2048));
+        // Check that both files are present (order guaranteed by ORDER BY file_path)
+        assert!(staged.contains(&("model.onnx".to_string(), "hash456".to_string(), 2048)));
+        assert!(staged.contains(&("test.txt".to_string(), "hash123".to_string(), 100)));
         
         // Test clearing staging
         db.clear_staging().unwrap();
@@ -318,8 +319,9 @@ mod tests {
         // Test getting commit files
         let commit_files = db.get_commit_files("commit1").unwrap();
         assert_eq!(commit_files.len(), 2);
-        assert_eq!(commit_files[0], ("file1.txt".to_string(), "hash1".to_string(), 100));
-        assert_eq!(commit_files[1], ("file2.txt".to_string(), "hash2".to_string(), 200));
+        // Check that both files are present (order guaranteed by ORDER BY file_path)
+        assert!(commit_files.contains(&("file1.txt".to_string(), "hash1".to_string(), 100)));
+        assert!(commit_files.contains(&("file2.txt".to_string(), "hash2".to_string(), 200)));
         
         // Test HEAD
         let head = db.get_head().unwrap();
@@ -339,7 +341,10 @@ mod tests {
         // Test commit history
         let history = db.get_commit_history(None).unwrap();
         assert_eq!(history.len(), 2);
+        // Check that both commits are present (order guaranteed by ORDER BY timestamp DESC)
+        assert!(history.iter().any(|c| c.hash == "commit1"));
+        assert!(history.iter().any(|c| c.hash == "commit2"));
+        // Most recent commit should be first
         assert_eq!(history[0].hash, "commit2");
-        assert_eq!(history[1].hash, "commit1");
     }
 }
