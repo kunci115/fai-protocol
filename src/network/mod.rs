@@ -16,8 +16,10 @@ use libp2p::{
 use serde::{Serialize, Deserialize};
 use std::{
     collections::HashMap,
+    sync::Arc,
     time::SystemTime,
 };
+use crate::storage::StorageManager;
 
 /// Information about a discovered peer
 #[derive(Debug, Clone)]
@@ -81,14 +83,19 @@ pub struct NetworkManager {
     swarm: Swarm<FAIBehaviour>,
     /// Map of discovered peers
     discovered_peers: HashMap<PeerId, PeerInfo>,
+    /// Storage manager for retrieving chunks
+    storage: Arc<StorageManager>,
 }
 
 impl NetworkManager {
     /// Create a new network manager
     /// 
+    /// # Arguments
+    /// * `storage` - Storage manager for retrieving chunks
+    /// 
     /// # Returns
     /// A new NetworkManager instance with configured libp2p stack
-    pub fn new() -> Result<Self> {
+    pub fn new(storage: Arc<StorageManager>) -> Result<Self> {
         // Generate identity
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
@@ -116,6 +123,7 @@ impl NetworkManager {
         Ok(Self {
             swarm,
             discovered_peers: HashMap::new(),
+            storage,
         })
     }
 
@@ -184,11 +192,21 @@ impl NetworkManager {
                     } = message {
                     println!("Received chunk request from {} for hash: {}", peer, request.hash);
                     
-                    // Check if we have the data (this would need access to storage)
-                    // For now, we'll respond with None (not found)
+                    // Try to retrieve the data from storage
+                    let data = match self.storage.retrieve(&request.hash) {
+                        Ok(data) => {
+                            println!("Found chunk {} ({} bytes)", request.hash, data.len());
+                            Some(data)
+                        }
+                        Err(_) => {
+                            println!("Chunk {} not found", request.hash);
+                            None
+                        }
+                    };
+                    
                     let response = ChunkResponse {
                         hash: request.hash.clone(),
-                        data: None, // TODO: Check storage manager for the data
+                        data,
                     };
                     
                     if let Err(e) = self.swarm.behaviour_mut().request_response.send_response(
@@ -196,6 +214,12 @@ impl NetworkManager {
                         response
                     ) {
                         eprintln!("Failed to send response: {:?}", e);
+                    } else {
+                        if let Some(ref d) = response.data {
+                            println!("Sent chunk {} ({} bytes) to peer {}", response.hash, d.len(), peer);
+                        } else {
+                            println!("Sent chunk {} (not found) to peer {}", response.hash, peer);
+                        }
                     }
                 }
                 }

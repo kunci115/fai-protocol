@@ -25,6 +25,7 @@ pub struct ModelMetadata {
 }
 
 /// Storage manager for AI models
+#[derive(Clone)]
 pub struct StorageManager {
     /// Root path to .fai directory
     root_path: PathBuf,
