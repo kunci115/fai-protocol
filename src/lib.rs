@@ -4,6 +4,7 @@
 //! in a decentralized manner.
 
 pub mod storage;
+pub mod database;
 
 /// Main library interface for FAI Protocol
 pub struct FaiProtocol {
