@@ -298,8 +298,6 @@ impl NetworkManager {
                 )) if response_id == request_id => {
                     println!("Request failed for hash: {} (error: {:?})", hash, error);
                     return Ok(None);
-                        _ => {}
-                    }
                 }
                 SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
                     for (peer_id, addr) in list {
