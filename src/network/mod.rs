@@ -149,6 +149,7 @@ impl NetworkManager {
         use futures::stream::StreamExt;
         
         if let Some(event) = self.swarm.next().await {
+            println!("DEBUG: Network event: {:?}", event);
             match event {
                 SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
                     for (peer_id, addr) in list {
@@ -185,6 +186,7 @@ impl NetworkManager {
                         message 
                     }
                 )) => {
+                    println!("DEBUG: Request-response message from {}: {:?}", peer, message);
                     if let libp2p::request_response::Message::Request { 
                         request, 
                         channel, 
@@ -230,11 +232,31 @@ impl NetworkManager {
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
                 }
-                SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-                    println!("Connected to {}", peer_id);
+                SwarmEvent::ConnectionEstablished { peer_id, endpoint_id, num_established, .. } => {
+                    println!("DEBUG: Connection established to {} (endpoint: {}, established: {})", 
+                        peer_id, endpoint_id, num_established);
                 }
-                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                    println!("Disconnected from {} (reason: {:?})", peer_id, cause);
+                SwarmEvent::ConnectionClosed { peer_id, cause, endpoint_id, num_established, .. } => {
+                    println!("DEBUG: Connection closed to {} (endpoint: {}, reason: {:?}, remaining: {})", 
+                        peer_id, endpoint_id, cause, num_established);
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::InboundFailure { 
+                        peer, 
+                        request_id, 
+                        error 
+                    }
+                )) => {
+                    println!("DEBUG: Inbound request failed from {} (id: {:?}, error: {:?})", peer, request_id, error);
+                }
+                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
+                    libp2p::request_response::Event::ResponseSent { 
+                        request_id, 
+                        peer, 
+                        result 
+                    }
+                )) => {
+                    println!("DEBUG: Response sent to {} for request {:?} (result: {:?})", peer, request_id, result);
                 }
                 _ => {}
             }
@@ -290,6 +312,38 @@ impl NetworkManager {
     /// The data if found, None if not found
     pub async fn request_chunk(&mut self, peer: PeerId, hash: &str) -> Result<Option<Vec<u8>>> {
         println!("DEBUG: request_chunk called with peer={}, hash={}", peer, hash);
+        
+        // Check if we have an active connection to this peer
+        let connected_peers = self.swarm.connected_peers().collect::<Vec<_>>();
+        println!("DEBUG: Currently connected to {} peers: {:?}", connected_peers.len(), connected_peers);
+        
+        if !connected_peers.contains(&peer) {
+            println!("DEBUG: Peer {} is not connected, attempting to dial", peer);
+            // Try to find addresses for this peer
+            if let Some(peer_info) = self.discovered_peers.get(&peer) {
+                println!("DEBUG: Found {} addresses for peer {}", peer_info.addresses.len(), peer);
+                for addr in &peer_info.addresses {
+                    println!("DEBUG: Attempting to dial {} at {}", peer, addr);
+                    if let Err(e) = self.swarm.dial(addr.clone()) {
+                        println!("DEBUG: Failed to dial {} at {}: {:?}", peer, addr, e);
+                    } else {
+                        println!("DEBUG: Dialing {} at {} initiated", peer, addr);
+                    }
+                }
+            } else {
+                println!("DEBUG: No addresses found for peer {}", peer);
+            }
+            
+            // Wait a bit for connection to establish
+            for _ in 0..50 {
+                let current_peers = self.swarm.connected_peers().collect::<Vec<_>>();
+                if current_peers.contains(&peer) {
+                    println!("DEBUG: Successfully connected to peer {}", peer);
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }
         
         let request_id = self.swarm.behaviour_mut().request_response.send_request(
             &peer,
