@@ -11,7 +11,7 @@ use libp2p::{
     Multiaddr,
     PeerId,
     swarm::{NetworkBehaviour, SwarmEvent},
-    request_response::{self, ProtocolSupport},
+    request_response::ProtocolSupport,
 };
 use serde::{Serialize, Deserialize};
 use std::{
@@ -97,7 +97,7 @@ impl NetworkManager {
         let behaviour = FAIBehaviour {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
-                [("/fai/chunk/1.0.0", ProtocolSupport::Full)],
+                [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
                 libp2p::request_response::Config::default(),
             ),
         };
@@ -172,12 +172,17 @@ impl NetworkManager {
                     }
                 }
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::InboundRequest { 
+                    libp2p::request_response::Event::Message { 
                         peer, 
-                        request_id, 
-                        request 
+                        message 
                     }
                 )) => {
+                    if let libp2p::request_response::Message::Request { 
+                        request_id, 
+                        request, 
+                        channel, 
+                        .. 
+                    } = message {
                     println!("Received chunk request from {} for hash: {}", peer, request.hash);
                     
                     // Check if we have the data (this would need access to storage)
@@ -188,11 +193,12 @@ impl NetworkManager {
                     };
                     
                     if let Err(e) = self.swarm.behaviour_mut().request_response.send_response(
-                        request_id,
+                        channel,
                         response
                     ) {
-                        eprintln!("Failed to send response: {}", e);
+                        eprintln!("Failed to send response: {:?}", e);
                     }
+                }
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
@@ -259,7 +265,7 @@ impl NetworkManager {
         let request_id = self.swarm.behaviour_mut().request_response.send_request(
             &peer,
             ChunkRequest { hash: hash.to_string() },
-        )?;
+        );
         
         println!("Sent chunk request {} to peer {}", hash, peer);
         
@@ -268,35 +274,36 @@ impl NetworkManager {
         while let Some(event) = self.swarm.next().await {
             match event {
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::Response { 
-                        request_id: response_id, 
-                        response 
+                    libp2p::request_response::Event::Message { 
+                        peer: response_peer, 
+                        message 
                     }
-                )) if response_id == request_id => {
-                    println!("Received chunk response for hash: {}", response.hash);
-                    return Ok(response.data);
-                }
-                SwarmEvent::Behaviour(FAIEvent::RequestResponse(
-                    libp2p::request_response::Event::OutboundFailure { 
-                        peer, 
-                        request_id, 
-                        error 
-                    }
-                )) if request_id == request_id => {
-                    println!("Request failed for hash: {} (error: {:?})", hash, error);
-                    return Ok(None);
-                }
-                _ => {
-                    // Handle other events
-                    if let SwarmEvent::Behaviour(FAIEvent::Mdns(event)) = event {
-                        if let mdns::Event::Discovered(list) = event {
-                            for (peer_id, addr) in list {
-                                println!("Discovered peer {} at {}", peer_id, addr);
-                                self.swarm.dial(addr)?;
-                            }
+                )) => {
+                    match message {
+                        libp2p::request_response::Message::Response { 
+                            request_id: response_id, 
+                            response 
+                        } if response_id == request_id => {
+                            println!("Received chunk response for hash: {}", response.hash);
+                            return Ok(response.data);
                         }
+                        libp2p::request_response::Message::OutboundFailure { 
+                            request_id: response_id, 
+                            error 
+                        } if response_id == request_id => {
+                            println!("Request failed for hash: {} (error: {:?})", hash, error);
+                            return Ok(None);
+                        }
+                        _ => {}
                     }
                 }
+                SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
+                    for (peer_id, addr) in list {
+                        println!("Discovered peer {} at {}", peer_id, addr);
+                        self.swarm.dial(addr)?;
+                    }
+                }
+                _ => {}
             }
         }
         
