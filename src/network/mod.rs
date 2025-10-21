@@ -209,16 +209,20 @@ impl NetworkManager {
                         data,
                     };
                     
+                    // Copy values before moving response
+                    let hash_copy = response.hash.clone();
+                    let data_len = response.data.as_ref().map(|d| d.len()).unwrap_or(0);
+                    
                     if let Err(e) = self.swarm.behaviour_mut().request_response.send_response(
                         channel,
                         response
                     ) {
                         eprintln!("Failed to send response: {:?}", e);
                     } else {
-                        if let Some(ref d) = response.data {
-                            println!("Sent chunk {} ({} bytes) to peer {}", response.hash, d.len(), peer);
+                        if data_len > 0 {
+                            println!("Sent chunk {} ({} bytes) to peer {}", hash_copy, data_len, peer);
                         } else {
-                            println!("Sent chunk {} (not found) to peer {}", response.hash, peer);
+                            println!("Sent chunk {} (not found) to peer {}", hash_copy, peer);
                         }
                     }
                 }
