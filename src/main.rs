@@ -243,7 +243,8 @@ async fn main() -> Result<()> {
             let discovery_start = std::time::Instant::now();
             let discovery_duration = std::time::Duration::from_secs(10);
             
-            println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
+            println!("DEBUG: Starting peer discovery for {} seconds...", discovery_duration.as_secs());
+            println!("DEBUG: Target peer: {}", target_peer);
             
             while discovery_start.elapsed() < discovery_duration {
                 if let Err(e) = network_manager.poll_events().await {
@@ -251,6 +252,8 @@ async fn main() -> Result<()> {
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
+            
+            println!("DEBUG: Discovery time elapsed, checking results...");
             
             // Check if target peer was discovered
             let peers = network_manager.list_peers();

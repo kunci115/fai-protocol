@@ -289,12 +289,15 @@ impl NetworkManager {
     /// # Returns
     /// The data if found, None if not found
     pub async fn request_chunk(&mut self, peer: PeerId, hash: &str) -> Result<Option<Vec<u8>>> {
+        println!("DEBUG: request_chunk called with peer={}, hash={}", peer, hash);
+        
         let request_id = self.swarm.behaviour_mut().request_response.send_request(
             &peer,
             ChunkRequest { hash: hash.to_string() },
         );
         
-        println!("Sent chunk request {} to peer {}", hash, peer);
+        println!("DEBUG: Sent chunk request {} to peer {}, request_id={:?}", hash, peer, request_id);
+        println!("DEBUG: Starting to wait for response...");
         
         // Wait for response
         use futures::StreamExt;
