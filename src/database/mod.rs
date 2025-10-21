@@ -327,7 +327,8 @@ mod tests {
         let head = db.get_head().unwrap();
         assert_eq!(head, Some("commit1".to_string()));
         
-        // Create second commit with parent
+        // Create second commit with parent (add small delay to ensure different timestamp)
+        std::thread::sleep(std::time::Duration::from_millis(10));
         let files2 = vec![
             ("file1.txt".to_string(), "hash1_updated".to_string(), 150),
             ("file3.txt".to_string(), "hash3".to_string(), 300),
