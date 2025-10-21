@@ -142,8 +142,8 @@ impl DatabaseManager {
         parent: Option<&str>,
         files: &[(String, String, u64)],
     ) -> Result<()> {
-        // Insert commit
-        let timestamp = Utc::now().timestamp();
+        // Insert commit with current timestamp in milliseconds for uniqueness
+        let timestamp = Utc::now().timestamp_millis();
         self.conn.execute(
             "INSERT INTO commits (hash, message, timestamp, parent_hash) VALUES (?1, ?2, ?3, ?4)",
             params![hash, message, timestamp, parent],
@@ -219,7 +219,7 @@ impl DatabaseManager {
     /// The latest commit hash if any commits exist
     pub fn get_head(&self) -> Result<Option<String>> {
         let mut stmt = self.conn.prepare(
-            "SELECT hash FROM commits ORDER BY timestamp DESC LIMIT 1"
+            "SELECT hash FROM commits ORDER BY timestamp DESC, hash DESC LIMIT 1"
         )?;
         
         let mut rows = stmt.query([])?;
