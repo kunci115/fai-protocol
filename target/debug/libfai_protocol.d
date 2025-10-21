@@ -1,0 +1,1 @@
+/Users/kunci115/Works/fai-work-pipeline/target/debug/libfai_protocol.rlib: /Users/kunci115/Works/fai-work-pipeline/src/database/mod.rs /Users/kunci115/Works/fai-work-pipeline/src/lib.rs /Users/kunci115/Works/fai-work-pipeline/src/network/mod.rs /Users/kunci115/Works/fai-work-pipeline/src/storage/mod.rs
