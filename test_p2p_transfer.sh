@@ -129,22 +129,56 @@ sleep 2
 # Step 6: Test P2P transfer with fetch
 print_step "Step 6: Testing P2P transfer"
 echo "Fetching chunk $FILE_HASH from peer $SERVER_PEER_ID..."
+echo ""
+echo "=== SERVER STATUS CHECK ==="
+if ! kill -0 $SERVE_PID 2>/dev/null; then
+    print_error "Server process died before fetch started"
+    cat "$SERVE_LOG"
+    exit 1
+fi
+echo "Server process is running (PID: $SERVE_PID)"
+echo "Server log size: $(wc -l < "$SERVE_LOG") lines"
+echo "Last few lines of server log:"
+tail -5 "$SERVE_LOG" | sed 's/^/  /'
+echo ""
 
 # Start fetch in background
+echo "=== STARTING FETCH ==="
+echo "Running: cargo run -- fetch $SERVER_PEER_ID $FILE_HASH"
 cargo run -- fetch "$SERVER_PEER_ID" "$FILE_HASH" > "$FETCH_LOG" 2>&1 &
 FETCH_PID=$!
+echo "Fetch started (PID: $FETCH_PID)"
 
 # Show fetch command output as it happens
 tail -f "$FETCH_LOG" &
 TAIL_PID=$!
 
-# Wait for fetch to complete with timeout using bash
+# Monitor progress
+echo "=== MONITORING FETCH PROGRESS ==="
 for i in $(seq 1 $TIMEOUT); do
     if ! kill -0 $FETCH_PID 2>/dev/null; then
+        echo ""
+        echo "=== FETCH COMPLETED ==="
         wait $FETCH_PID
         FETCH_EXIT_CODE=$?
+        echo "Fetch exit code: $FETCH_EXIT_CODE"
+        echo "Fetch ran for $i seconds"
         break
     fi
+    
+    # Show progress every 5 seconds
+    if [ $((i % 5)) -eq 0 ]; then
+        echo "Progress: $i/$TIMEOUT seconds elapsed"
+        echo "  Server log lines: $(wc -l < "$SERVE_LOG")"
+        echo "  Fetch log lines: $(wc -l < "$FETCH_LOG")"
+        
+        # Show any recent interesting log entries
+        if grep -q "DEBUG\|ERROR\|Found peer\|Requesting\|Received" "$FETCH_LOG"; then
+            echo "  Recent fetch activity:"
+            tail -3 "$FETCH_LOG" | grep -E "DEBUG|ERROR|Found|Requesting|Received" | sed 's/^/    /'
+        fi
+    fi
+    
     sleep 1
 done
 
