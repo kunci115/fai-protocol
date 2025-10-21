@@ -5,6 +5,7 @@
 
 pub mod storage;
 pub mod database;
+pub mod network;
 
 use std::path::PathBuf;
 use anyhow::Result;
