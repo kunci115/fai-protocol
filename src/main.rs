@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
 use std::path::Path;
-use std::sync::Arc;
 use std::str::FromStr;
 use libp2p::PeerId;
 use fai_protocol::FaiProtocol;

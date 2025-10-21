@@ -85,7 +85,11 @@ if [ $? -ne 0 ]; then
 fi
 
 # Extract hash from output
-FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '([a-f0-9]\{64\})' | sed 's/[()]*//g' | head -n1)
+FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '([a-f0-9]\{8\})' | sed 's/[()]*//g' | head -n1)
+if [ -z "$FILE_HASH" ]; then
+    # Try alternative format if the first pattern doesn't match
+    FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{8\}' | head -n1)
+fi
 if [ -z "$FILE_HASH" ]; then
     print_error "Could not extract file hash from output"
     echo "$ADD_OUTPUT"
