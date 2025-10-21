@@ -28,6 +28,8 @@ enum Commands {
     Status,
     /// Show commit history
     Log,
+    /// Discover and list network peers
+    Peers,
 }
 
 fn main() -> Result<()> {
@@ -124,6 +126,68 @@ fn main() -> Result<()> {
                     println!();
                 }
             }
+        }
+        Commands::Peers => {
+            println!("Discovering peers on local network...");
+            
+            // Create network manager
+            let mut network_manager = match fai_protocol::network::NetworkManager::new() {
+                Ok(nm) => nm,
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                }
+            };
+            
+            // Start the network manager
+            if let Err(e) = network_manager.start() {
+                return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
+            }
+            
+            // Discover peers for 5 seconds
+            let start_time = std::time::Instant::now();
+            let discovery_duration = std::time::Duration::from_secs(5);
+            
+            println!("Local peer ID: {}", network_manager.local_peer_id());
+            println!();
+            
+            while start_time.elapsed() < discovery_duration {
+                if let Err(e) = network_manager.poll_events().await {
+                    eprintln!("Error during peer discovery: {}", e);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            
+            // List discovered peers
+            let peers = network_manager.list_peers();
+            
+            if peers.is_empty() {
+                println!("No peers discovered");
+            } else {
+                for peer in &peers {
+                    println!("Peer ID: {}", peer.peer_id);
+                    
+                    if !peer.addresses.is_empty() {
+                        println!("Addresses:");
+                        for addr in &peer.addresses {
+                            println!("  {}", addr);
+                        }
+                    }
+                    
+                    let last_seen = peer.last_seen.elapsed().unwrap_or_default();
+                    let seconds_ago = last_seen.as_secs();
+                    if seconds_ago < 60 {
+                        println!("Last seen: {} seconds ago", seconds_ago);
+                    } else if seconds_ago < 3600 {
+                        println!("Last seen: {} minutes ago", seconds_ago / 60);
+                    } else {
+                        println!("Last seen: {} hours ago", seconds_ago / 3600);
+                    }
+                    
+                    println!();
+                }
+            }
+            
+            println!("Found {} peer(s)", peers.len());
         }
     }
 
