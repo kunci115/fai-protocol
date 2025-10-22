@@ -226,6 +226,19 @@ cat "$FETCH_LOG"
 echo -e "\n${YELLOW}=== SERVER LOG ===${NC}"
 cat "$SERVE_LOG"
 
+# Check if server received chunk requests
+if grep -q "Received chunk request" "$SERVE_LOG"; then
+    echo -e "\n${GREEN}✓ Server received chunk request${NC}"
+else
+    echo -e "\n${RED}✗ Server never received chunk request${NC}"
+fi
+
+if grep -q "Sent chunk" "$SERVE_LOG"; then
+    echo -e "\n${GREEN}✓ Server sent chunk response${NC}"
+else
+    echo -e "\n${RED}✗ Server never sent chunk response${NC}"
+fi
+
 # Check if fetched file exists
 FETCHED_FILE="fetched_${FILE_HASH:0:8}.dat"
 if [ ! -f "$FETCHED_FILE" ]; then
