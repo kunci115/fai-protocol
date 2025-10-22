@@ -357,7 +357,39 @@ impl NetworkManager {
         // Ensure we're connected before sending request
         if !self.swarm.is_connected(&peer) {
             println!("DEBUG: Not connected to peer {}, attempting to reconnect", peer);
-            return Ok(None);
+            
+            // Try to re-establish connection
+            if let Some(peer_info) = self.discovered_peers.get(&peer) {
+                println!("DEBUG: Attempting to reconnect to peer {} at {} addresses", peer, peer_info.addresses.len());
+                for addr in &peer_info.addresses {
+                    if let Err(e) = self.swarm.dial(addr.clone()) {
+                        println!("DEBUG: Failed to dial {} at {}: {:?}", peer, addr, e);
+                    } else {
+                        println!("DEBUG: Re-dialing {} at {} initiated", peer, addr);
+                    }
+                }
+                
+                // Wait for connection to establish
+                for i in 0..100 { // 10 seconds
+                    let current_peers = self.swarm.connected_peers().collect::<Vec<_>>();
+                    if current_peers.iter().any(|p| **p == peer) {
+                        println!("DEBUG: Successfully reconnected to peer {}", peer);
+                        break;
+                    }
+                    
+                    if i % 10 == 0 {
+                        println!("DEBUG: Waiting for reconnection... {}/10 seconds", i / 10);
+                    }
+                    
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+            
+            // Check if we're connected now
+            if !self.swarm.is_connected(&peer) {
+                println!("DEBUG: Still not connected to peer {}, cannot send request", peer);
+                return Ok(None);
+            }
         }
         
         let request_id = self.swarm.behaviour_mut().request_response.send_request(
