@@ -63,10 +63,16 @@ cleanup
 
 # Step 2: Initialize FAI repository
 print_step "Step 2: Initializing FAI repository"
-if cargo run -- init > /dev/null 2>&1; then
+if cargo run -- init 2>&1 | tee init.log; then
     print_success "FAI repository initialized"
+    rm -f init.log
 else
     print_error "Failed to initialize FAI repository"
+    if [ -f init.log ]; then
+        echo "Error output:"
+        cat init.log
+        rm -f init.log
+    fi
     exit 1
 fi
 
