@@ -31,7 +31,7 @@ cleanup() {
     
     # Clean up test files and directories
     rm -f "$TEST_FILE"
-    rm -f fetched_*.dat
+#    rm -f fetched_*.dat
     rm -f "$SERVE_LOG" "$FETCH_LOG"
     rm -rf .fai
     
