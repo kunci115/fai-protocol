@@ -374,10 +374,11 @@ async fn main() -> Result<()> {
                     
                     // Save complete file
                     let filename = format!("fetched_{}.dat", hash);
+                    let complete_data_len = complete_data.len();
                     std::fs::write(&filename, complete_data)?;
                     
                     println!("✓ Downloaded all {} chunks", total_chunks);
-                    println!("✓ Assembled complete file ({} bytes)", complete_data.len());
+                    println!("✓ Assembled complete file ({} bytes)", complete_data_len);
                     println!("Saved to: {}", filename);
                 } else {
                     return Err(anyhow::anyhow!("Invalid manifest format: no chunks found"));
