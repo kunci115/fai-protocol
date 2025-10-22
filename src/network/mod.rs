@@ -197,13 +197,14 @@ impl NetworkManager {
                             println!("DEBUG: Received chunk request {} from {} (request_id: {:?})", request.hash, peer, request_id);
                             
                             // Try to retrieve the data from storage
+                            println!("DEBUG: Server attempting to retrieve chunk: {}", request.hash);
                             let data = match self.storage.retrieve(&request.hash) {
                                 Ok(data) => {
-                                    println!("Found chunk {} ({} bytes)", request.hash, data.len());
+                                    println!("DEBUG: Server successfully retrieved chunk {} ({} bytes)", request.hash, data.len());
                                     Some(data)
                                 }
                                 Err(e) => {
-                                    println!("Chunk {} not found: {}", request.hash, e);
+                                    println!("DEBUG: Server failed to retrieve chunk {}: {}", request.hash, e);
                                     None
                                 }
                             };
