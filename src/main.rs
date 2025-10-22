@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use libp2p::PeerId;
 use fai_protocol::FaiProtocol;
+use tokio::task::JoinSet;
 
 #[derive(Parser)]
 #[command(name = "fai")]
@@ -186,7 +187,7 @@ async fn main() -> Result<()> {
             )?);
             
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage) {
+            let network_manager = match fai_protocol::network::NetworkManager::new(storage) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
@@ -262,8 +263,8 @@ async fn main() -> Result<()> {
             )?);
             
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
-                Ok(nm) => nm,
+            let network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
+                Ok(nm) => Arc::new(nm),
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
                 }
@@ -345,35 +346,72 @@ async fn main() -> Result<()> {
                 
                 if let Some(chunks) = manifest.get("chunks").and_then(|c| c.as_array()) {
                     let total_chunks = chunks.len();
-                    println!("Downloading {} chunks...", total_chunks);
+                    println!("Downloading {} chunks in parallel...", total_chunks);
                     
-                    let mut all_chunk_data = Vec::new();
+                    // Pre-allocate vector for chunk data in correct order
+                    let mut chunks_data: Vec<Option<Vec<u8>>> = vec![None; total_chunks];
                     
-                    // Download each chunk
+                    // Create parallel download tasks
+                    let mut join_set = JoinSet::new();
+                    
                     for (i, chunk_value) in chunks.iter().enumerate() {
                         if let Some(chunk_hash) = chunk_value.as_str() {
-                            println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &chunk_hash[..8]);
+                            let peer = target_peer.clone();
+                            let hash = chunk_hash.clone();
+                            let mut manager = network_manager.clone();
                             
-                            match network_manager.request_chunk(target_peer, chunk_hash).await {
-                                Ok(Some(chunk_data)) => {
-                                    println!("✓ Downloaded chunk {} ({} bytes)", i + 1, chunk_data.len());
-                                    all_chunk_data.push(chunk_data);
+                            join_set.spawn(async move {
+                                println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &hash[..8]);
+                                match manager.request_chunk(&peer, &hash).await {
+                                    Ok(Some(data)) => {
+                                        println!("✓ Downloaded chunk {} ({} bytes)", i + 1, data.len());
+                                        Ok::<(usize, Vec<u8>), anyhow::Error>((i, data))
+                                    }
+                                    Ok(None) => {
+                                        Err(anyhow::anyhow!("✗ Chunk {} not available from peer", i + 1))
+                                    }
+                                    Err(e) => {
+                                        Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e))
+                                    }
                                 }
-                                Ok(None) => {
-                                    return Err(anyhow::anyhow!("✗ Chunk {} not available from peer {}", i + 1, peer_id));
-                                }
-                                Err(e) => {
-                                    return Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e));
-                                }
+                            });
+                        }
+                    }
+                    
+                    // Collect results as they complete
+                    let mut completed = 0;
+                    while let Some(result) = join_set.join_next().await {
+                        match result {
+                            Ok(Ok((index, data))) => {
+                                chunks_data[index] = Some(data);
+                                completed += 1;
+                                println!("Progress: {}/{} chunks completed", completed, total_chunks);
+                            }
+                            Ok(Err(e)) => {
+                                return Err(e);
+                            }
+                            Err(e) => {
+                                return Err(anyhow::anyhow!("Task failed: {}", e));
                             }
                         }
                     }
                     
+                    // Verify all chunks were downloaded
+                    for (i, chunk_data) in chunks_data.iter().enumerate() {
+                        if chunk_data.is_none() {
+                            return Err(anyhow::anyhow!("Chunk {} failed to download", i + 1));
+                        }
+                    }
+                    
+                    println!("✓ All {} chunks downloaded", total_chunks);
+                    
                     // Assemble complete file
                     println!("Assembling complete file from {} chunks...", total_chunks);
                     let mut complete_data = Vec::new();
-                    for chunk_data in all_chunk_data {
-                        complete_data.extend_from_slice(&chunk_data);
+                    for chunk_data in chunks_data {
+                        if let Some(data) = chunk_data {
+                            complete_data.extend_from_slice(&data);
+                        }
                     }
                     
                     // Save complete file
@@ -381,7 +419,6 @@ async fn main() -> Result<()> {
                     let complete_data_len = complete_data.len();
                     std::fs::write(&filename, complete_data)?;
                     
-                    println!("✓ Downloaded all {} chunks", total_chunks);
                     println!("✓ Assembled complete file ({} bytes)", complete_data_len);
                     println!("Saved to: {}", filename);
                 } else {
