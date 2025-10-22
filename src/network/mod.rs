@@ -17,7 +17,7 @@ use serde::{Serialize, Deserialize};
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::SystemTime,
+    time::{SystemTime, Duration},
 };
 use crate::storage::StorageManager;
 
@@ -118,6 +118,7 @@ impl NetworkManager {
                 yamux::Config::default,
             )?
             .with_behaviour(|_| behaviour)?
+            .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
 
         Ok(Self {
