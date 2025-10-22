@@ -246,16 +246,23 @@ async fn main() -> Result<()> {
             println!("DEBUG: Starting peer discovery for {} seconds...", discovery_duration.as_secs());
             println!("DEBUG: Target peer: {}", target_peer);
             
-            println!("DEBUG: Starting discovery loop for {} seconds", discovery_duration.as_secs());
-            while discovery_start.elapsed() < discovery_duration {
-                if let Err(e) = network_manager.poll_events().await {
-                    eprintln!("Error during peer discovery: {}", e);
+            println!("DEBUG: Starting discovery with tokio::select timeout");
+            loop {
+                tokio::select! {
+                    result = network_manager.poll_events() => {
+                        if let Err(e) = result {
+                            eprintln!("Error during peer discovery: {}", e);
+                        }
+                    }
+                    _ = tokio::time::sleep(discovery_duration) => {
+                        println!("DEBUG: Discovery timeout reached after {} seconds!", discovery_duration.as_secs());
+                        break;
+                    }
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 
-                // Check elapsed time more frequently to ensure we exit
+                // Check if we should exit
                 if discovery_start.elapsed() >= discovery_duration {
-                    println!("DEBUG: Discovery timeout reached!");
+                    println!("DEBUG: Discovery duration elapsed, breaking");
                     break;
                 }
             }
