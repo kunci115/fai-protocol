@@ -235,9 +235,12 @@ impl NetworkManager {
                             response,
                             ..
                         } => {
-                            println!("DEBUG: Received response for request {:?}: hash={}, data_len={}", 
-                                request_id, response.hash, 
-                                response.data.as_ref().map(|d| d.len()).unwrap_or(0));
+                            let data_len = response.data.as_ref().map(|d| d.len()).unwrap_or(0);
+                            println!("DEBUG: Received response for request {:?}: hash={}, data_len={}, data_present={}", 
+                                request_id, response.hash, data_len, response.data.is_some());
+                            if let Some(ref data) = response.data {
+                                println!("DEBUG: Response data preview: {:?}", &data[..data.len().min(20)]);
+                            }
                         }
                     }
                 }
@@ -416,7 +419,14 @@ impl NetworkManager {
                             request_id: response_id, 
                             response 
                         } if response_id == request_id => {
-                            println!("DEBUG: Received matching response for request {:?}: hash={}", response_id, response.hash);
+                            let data_len = response.data.as_ref().map(|d| d.len()).unwrap_or(0);
+                            println!("DEBUG: Received matching response for request {:?}: hash={}, data_len={}, has_data={}", 
+                                response_id, response.hash, data_len, response.data.is_some());
+                            if let Some(ref data) = response.data {
+                                println!("DEBUG: Successfully received {} bytes: {:?}", data.len(), &data[..data.len().min(20)]);
+                            } else {
+                                println!("DEBUG: Response data is None - server couldn't find the chunk");
+                            }
                             return Ok(response.data);
                         }
                         libp2p::request_response::Message::Response { 
