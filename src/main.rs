@@ -86,18 +86,21 @@ async fn main() -> Result<()> {
                     if let Ok(manifest_str) = std::str::from_utf8(&manifest_data) {
                         if manifest_str.trim_start().starts_with('{') {
                             println!("✓ File was chunked into multiple pieces");
-                            println!("  Manifest hash: {} ({})", hash, &hash[..8]);
                             if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(manifest_str) {
+                                let chunk_count = manifest.get("chunks").and_then(|c| c.as_array()).map(|c| c.len()).unwrap_or(0);
+                                let total_size = manifest.get("total_size").and_then(|s| s.as_u64()).unwrap_or(0);
+                                
+                                println!("Added {} ({})", path, hash);
+                                println!("  Manifest hash: {} ({})", hash, &hash[..8]);
+                                println!("  {} chunks, {} total bytes ({:.2} MB)", 
+                                    chunk_count, total_size, total_size as f64 / 1_048_576.0);
+                                
                                 if let Some(chunks) = manifest.get("chunks").and_then(|c| c.as_array()) {
-                                    println!("  Number of chunks: {}", chunks.len());
                                     for (i, chunk) in chunks.iter().enumerate() {
                                         if let Some(chunk_hash) = chunk.as_str() {
                                             println!("  Chunk {}: {} ({})", i, chunk_hash, &chunk_hash[..8]);
                                         }
                                     }
-                                }
-                                if let Some(total_size) = manifest.get("total_size").and_then(|s| s.as_u64()) {
-                                    println!("  Total size: {} bytes ({:.2} MB)", total_size, total_size as f64 / 1_048_576.0);
                                 }
                             }
                         }
@@ -105,6 +108,7 @@ async fn main() -> Result<()> {
                 }
             } else {
                 println!("✓ File stored as single object");
+                println!("Added {} ({})", path, hash);
                 println!("  File hash: {} ({})", hash, &hash[..8]);
             }
         }
