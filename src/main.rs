@@ -258,7 +258,7 @@ async fn main() -> Result<()> {
             )?);
             
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage) {
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
@@ -324,29 +324,90 @@ async fn main() -> Result<()> {
             }
             
             println!("Found peer {}", peer_id);
-            println!("Requesting chunk {}...", &hash[..8]);
             
-            // Request the chunk
-            match network_manager.request_chunk(target_peer, &hash).await {
-                Ok(Some(data)) => {
-                    println!("✓ Received {} bytes", data.len());
+            // Check if this is a manifest file by reading it directly
+            let manifest_path = format!(".fai/objects/{}/{}", &hash[..2], &hash[2..]);
+            let is_manifest = std::path::Path::new(&manifest_path).exists() && 
+                             std::fs::read_to_string(&manifest_path)
+                                .map(|s| s.trim_start().starts_with('{'))
+                                .unwrap_or(false);
+            
+            if is_manifest {
+                println!("Detected multi-chunk file");
+                
+                // Read the manifest to get chunk list
+                let manifest_data = std::fs::read_to_string(&manifest_path)?;
+                let manifest: serde_json::Value = serde_json::from_str(&manifest_data)?;
+                
+                if let Some(chunks) = manifest.get("chunks").and_then(|c| c.as_array()) {
+                    let total_chunks = chunks.len();
+                    println!("Downloading {} chunks...", total_chunks);
                     
-                    // Save to file using full hash
+                    let mut all_chunk_data = Vec::new();
+                    
+                    // Download each chunk
+                    for (i, chunk_value) in chunks.iter().enumerate() {
+                        if let Some(chunk_hash) = chunk_value.as_str() {
+                            println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &chunk_hash[..8]);
+                            
+                            match network_manager.request_chunk(target_peer, chunk_hash).await {
+                                Ok(Some(chunk_data)) => {
+                                    println!("✓ Downloaded chunk {} ({} bytes)", i + 1, chunk_data.len());
+                                    all_chunk_data.push(chunk_data);
+                                }
+                                Ok(None) => {
+                                    return Err(anyhow::anyhow!("✗ Chunk {} not available from peer {}", i + 1, peer_id));
+                                }
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Assemble complete file
+                    println!("Assembling complete file from {} chunks...", total_chunks);
+                    let mut complete_data = Vec::new();
+                    for chunk_data in all_chunk_data {
+                        complete_data.extend_from_slice(&chunk_data);
+                    }
+                    
+                    // Save complete file
                     let filename = format!("fetched_{}.dat", hash);
-                    let absolute_path = std::env::current_dir().unwrap().join(&filename);
-                    println!("DEBUG: Saving to absolute path: {:?}", absolute_path);
+                    std::fs::write(&filename, complete_data)?;
                     
-                    std::fs::write(&filename, data)?;
-                    println!("DEBUG: File written successfully");
+                    println!("✓ Downloaded all {} chunks", total_chunks);
+                    println!("✓ Assembled complete file ({} bytes)", complete_data.len());
                     println!("Saved to: {}", filename);
-                    println!("DEBUG: File exists: {}", std::path::Path::new(&filename).exists());
+                } else {
+                    return Err(anyhow::anyhow!("Invalid manifest format: no chunks found"));
                 }
-                Ok(None) => {
-                    println!("DEBUG: Chunk {} not available from peer {}", hash, peer_id);
-                    return Err(anyhow::anyhow!("✗ Chunk not available from peer {}", peer_id));
-                }
-                Err(e) => {
-                    return Err(anyhow::anyhow!("Failed to fetch chunk: {}", e));
+            } else {
+                // Single chunk file
+                println!("Requesting chunk {}...", &hash[..8]);
+                
+                // Request the chunk
+                match network_manager.request_chunk(target_peer, &hash).await {
+                    Ok(Some(data)) => {
+                        println!("✓ Received {} bytes", data.len());
+                        
+                        // Save to file using full hash
+                        let filename = format!("fetched_{}.dat", hash);
+                        let absolute_path = std::env::current_dir().unwrap().join(&filename);
+                        println!("DEBUG: Saving to absolute path: {:?}", absolute_path);
+                        
+                        std::fs::write(&filename, data)?;
+                        println!("DEBUG: File written successfully");
+                        println!("Saved to: {}", filename);
+                        println!("DEBUG: File exists: {}", std::path::Path::new(&filename).exists());
+                    }
+                    Ok(None) => {
+                        println!("DEBUG: Chunk {} not available from peer {}", hash, peer_id);
+                        return Err(anyhow::anyhow!("✗ Chunk not available from peer {}", peer_id));
+                    }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to fetch chunk: {}", e));
+                    }
                 }
             }
         }

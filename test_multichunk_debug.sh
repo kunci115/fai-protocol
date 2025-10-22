@@ -25,7 +25,11 @@ ADD_OUTPUT=$(cargo run -- add test_large.bin 2>&1)
 echo "$ADD_OUTPUT"
 
 # Extract manifest hash (last hash in output for chunked files)
-LARGE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{64\}' | tail -n1)
+LARGE_HASH=$(echo "$ADD_OUTPUT" | grep -o 'Manifest hash: [a-f0-9]\{64\}' | sed 's/Manifest hash: //' | head -n1)
+if [ -z "$LARGE_HASH" ]; then
+    # Fallback: try to get the last hash
+    LARGE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{64\}' | tail -n1)
+fi
 echo "Large file hash: $LARGE_HASH"
 echo "Hash type: MANIFEST (should reconstruct complete file)"
 
