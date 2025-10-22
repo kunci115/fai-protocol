@@ -228,8 +228,8 @@ impl StorageManager {
             let mut hasher = Hasher::new();
             hasher.update(chunk_data);
             let hash = hasher.finalize().to_hex().to_string();
-            chunks.push((hash, chunk_data.to_vec()));
             println!("DEBUG: Created chunk {} ({} bytes, hash: {})", i, chunk_data.len(), &hash[..16]);
+            chunks.push((hash, chunk_data.to_vec()));
         }
         
         println!("DEBUG: Chunked file into {} chunks", chunks.len());
