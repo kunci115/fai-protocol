@@ -362,7 +362,7 @@ async fn main() -> Result<()> {
                             
                             join_set.spawn(async move {
                                 println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &hash[..8]);
-                                match manager.request_chunk(&peer, &hash).await {
+                                match manager.request_chunk(peer.clone(), &hash).await {
                                     Ok(Some(data)) => {
                                         println!("✓ Downloaded chunk {} ({} bytes)", i + 1, data.len());
                                         Ok::<(usize, Vec<u8>), anyhow::Error>((i, data))
