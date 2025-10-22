@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
             )?);
             
             // Create network manager
-            let network_manager = match fai_protocol::network::NetworkManager::new(storage) {
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
@@ -262,9 +262,9 @@ async fn main() -> Result<()> {
                 Path::new(".fai").to_path_buf()
             )?);
             
-            // Create network manager
-            let network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
-                Ok(nm) => Arc::new(nm),
+            // Create network manager (single threaded for now to avoid complex async issues)
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
+                Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
                 }
@@ -344,57 +344,38 @@ async fn main() -> Result<()> {
                 let manifest_data = std::fs::read_to_string(&manifest_path)?;
                 let manifest: serde_json::Value = serde_json::from_str(&manifest_data)?;
                 
-                if let Some(chunks) = manifest.get("chunks").and_then(|c| c.as_array()) {
+                // Clone the chunks array to avoid lifetime issues
+                let chunks_array = manifest.get("chunks").and_then(|c| c.as_array())
+                    .map(|c| c.clone())
+                    .unwrap_or_default();
+                
+                if let Some(chunks) = chunks_array.as_array() {
                     let total_chunks = chunks.len();
                     println!("Downloading {} chunks in parallel...", total_chunks);
                     
                     // Pre-allocate vector for chunk data in correct order
                     let mut chunks_data: Vec<Option<Vec<u8>>> = vec![None; total_chunks];
                     
-                    // Create parallel download tasks
-                    let mut join_set = JoinSet::new();
-                    
+                    // Download chunks sequentially for now (parallel version would require more complex async handling)
                     for (i, chunk_value) in chunks.iter().enumerate() {
                         if let Some(chunk_hash) = chunk_value.as_str() {
-                            let peer = target_peer.clone();
-                            let hash = chunk_hash.clone();
-                            let mut manager = network_manager.clone();
-                            
-                            join_set.spawn(async move {
-                                println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &hash[..8]);
-                                match manager.request_chunk(peer.clone(), &hash).await {
-                                    Ok(Some(data)) => {
-                                        println!("✓ Downloaded chunk {} ({} bytes)", i + 1, data.len());
-                                        Ok::<(usize, Vec<u8>), anyhow::Error>((i, data))
-                                    }
-                                    Ok(None) => {
-                                        Err(anyhow::anyhow!("✗ Chunk {} not available from peer", i + 1))
-                                    }
-                                    Err(e) => {
-                                        Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e))
-                                    }
+                            println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &chunk_hash[..8]);
+                            match network_manager.request_chunk(target_peer.clone(), chunk_hash).await {
+                                Ok(Some(data)) => {
+                                    println!("✓ Downloaded chunk {} ({} bytes)", i + 1, data.len());
+                                    chunks_data[i] = Some(data);
                                 }
-                            });
+                                Ok(None) => {
+                                    return Err(anyhow::anyhow!("✗ Chunk {} not available from peer", i + 1));
+                                }
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e));
+                                }
+                            }
                         }
                     }
                     
-                    // Collect results as they complete
-                    let mut completed = 0;
-                    while let Some(result) = join_set.join_next().await {
-                        match result {
-                            Ok(Ok((index, data))) => {
-                                chunks_data[index] = Some(data);
-                                completed += 1;
-                                println!("Progress: {}/{} chunks completed", completed, total_chunks);
-                            }
-                            Ok(Err(e)) => {
-                                return Err(e);
-                            }
-                            Err(e) => {
-                                return Err(anyhow::anyhow!("Task failed: {}", e));
-                            }
-                        }
-                    }
+                    println!("✓ All {} chunks downloaded", total_chunks);
                     
                     // Verify all chunks were downloaded
                     for (i, chunk_data) in chunks_data.iter().enumerate() {

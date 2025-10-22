@@ -5,6 +5,7 @@
 use anyhow::{Result, anyhow};
 use std::path::PathBuf;
 use std::fs;
+use std::sync::{Arc, Mutex};
 use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 use rusqlite::Connection;
@@ -39,11 +40,12 @@ pub struct ModelMetadata {
 }
 
 /// Storage manager for AI models
+#[derive(Clone)]
 pub struct StorageManager {
     /// Root path to .fai directory
     root_path: PathBuf,
     /// SQLite database connection for metadata
-    db: Connection,
+    db: Arc<Mutex<Connection>>,
 }
 
 impl StorageManager {
@@ -65,7 +67,7 @@ impl StorageManager {
             [],
         )?;
         
-        Ok(Self { root_path: root, db })
+        Ok(Self { root_path: root, db: Arc::new(Mutex::new(db)) })
     }
 
     /// Store data and return its content hash
@@ -351,7 +353,8 @@ impl StorageManager {
     /// # Returns
     /// Ok(()) if successful, Err otherwise
     pub fn store_metadata(&self, metadata: &ModelMetadata) -> Result<()> {
-        self.db.execute(
+        let conn = self.db.lock().unwrap();
+        conn.execute(
             "INSERT OR REPLACE INTO models (hash, name, version, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
             [
                 &metadata.hash,
@@ -372,7 +375,8 @@ impl StorageManager {
     /// # Returns
     /// The metadata if found, None otherwise
     pub fn get_metadata(&self, hash: &str) -> Result<Option<ModelMetadata>> {
-        let mut stmt = self.db.prepare(
+        let conn = self.db.lock().unwrap();
+        let mut stmt = conn.prepare(
             "SELECT hash, name, version, size, created_at FROM models WHERE hash = ?1"
         )?;
         
