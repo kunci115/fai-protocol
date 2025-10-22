@@ -105,8 +105,7 @@ impl NetworkManager {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
                 [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
-                libp2p::request_response::Config::default()
-                    .with_connection_keep_alive(std::time::Duration::from_secs(60)),
+                libp2p::request_response::Config::default(),
             ),
         };
 
