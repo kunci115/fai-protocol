@@ -9,6 +9,20 @@ use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 use rusqlite::Connection;
 
+/// Chunk size for large files (1MB)
+const CHUNK_SIZE: usize = 1024 * 1024;
+
+/// Manifest file structure for multi-chunk files
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileManifest {
+    /// Total file size in bytes
+    pub total_size: u64,
+    /// List of chunk hashes in order
+    pub chunks: Vec<String>,
+    /// Original file name (optional)
+    pub filename: Option<String>,
+}
+
 /// Metadata for a stored AI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelMetadata {
@@ -61,15 +75,208 @@ impl StorageManager {
     /// 
     /// # Returns
     /// The BLAKE3 hash of the stored data as a hex string
+    /// For large files (>1MB), returns the manifest hash
     pub fn store(&self, data: &[u8]) -> Result<String> {
         println!("DEBUG: StorageManager::store called with {} bytes of data", data.len());
         
+        // Check if file needs to be chunked
+        if data.len() > CHUNK_SIZE {
+            println!("DEBUG: Large file detected ({} bytes > {} bytes), chunking...", data.len(), CHUNK_SIZE);
+            
+            // Chunk the file
+            let chunks = self.chunk_file(data)?;
+            
+            // Store each chunk
+            for (i, (chunk_hash, chunk_data)) in chunks.iter().enumerate() {
+                println!("DEBUG: Storing chunk {}/{} (hash: {})", i + 1, chunks.len(), &chunk_hash[..16]);
+                self.store_single_object(chunk_data)?; // Store will compute hash again
+            }
+            
+            // Create and store manifest
+            let manifest_hash = self.create_manifest(&chunks, None)?;
+            println!("DEBUG: Stored large file with manifest hash: {} ({} chunks)", &manifest_hash[..16], chunks.len());
+            
+            Ok(manifest_hash)
+        } else {
+            // Small file - store as single object
+            println!("DEBUG: Small file detected, storing as single object");
+            self.store_single_object(data)
+        }
+    }
+
+    /// Retrieve data by its content hash
+    /// 
+    /// # Arguments
+    /// * `hash` - The BLAKE3 hash of the data to retrieve
+    /// 
+    /// # Returns
+    /// The stored data as bytes
+    pub fn retrieve(&self, hash: &str) -> Result<Vec<u8>> {
+        println!("DEBUG: StorageManager::retrieve called with hash: {}", hash);
+        
+        if hash.len() < 2 {
+            println!("DEBUG: Invalid hash length: {}", hash.len());
+            return Err(anyhow!("Invalid hash length"));
+        }
+        
+        let prefix = &hash[..2];
+        let suffix = &hash[2..];
+        let object_path = self.root_path.join("objects").join(prefix).join(suffix);
+        
+        println!("DEBUG: Looking for object at path: {:?}", object_path);
+        println!("DEBUG: Object exists: {}", object_path.exists());
+        
+        match fs::read(&object_path) {
+            Ok(data) => {
+                println!("DEBUG: Successfully retrieved {} bytes for hash: {}", data.len(), hash);
+                
+                // Check if this is a manifest file (JSON)
+                if let Ok(manifest_str) = std::str::from_utf8(&data) {
+                    if manifest_str.trim_start().starts_with('{') {
+                        println!("DEBUG: Detected manifest file, reconstructing from chunks");
+                        return self.reconstruct_from_manifest(manifest_str);
+                    }
+                }
+                
+                // Regular file, return as-is
+                Ok(data)
+            },
+            Err(e) => {
+                println!("DEBUG: Failed to retrieve object {}: {}", hash, e);
+                Err(anyhow!("Object not found: {}", hash))
+            },
+        }
+    }
+
+    /// Reconstruct file data from manifest
+    /// 
+    /// # Arguments
+    /// * `manifest_str` - JSON manifest string
+    /// 
+    /// # Returns
+    /// Reconstructed file data
+    fn reconstruct_from_manifest(&self, manifest_str: &str) -> Result<Vec<u8>> {
+        let manifest: FileManifest = serde_json::from_str(manifest_str)?;
+        println!("DEBUG: Reconstructing file from {} chunks (total size: {} bytes)", 
+                manifest.chunks.len(), manifest.total_size);
+        
+        let mut reconstructed_data = Vec::with_capacity(manifest.total_size as usize);
+        
+        for (i, chunk_hash) in manifest.chunks.iter().enumerate() {
+            println!("DEBUG: Retrieving chunk {}/{} (hash: {})", i + 1, manifest.chunks.len(), &chunk_hash[..16]);
+            
+            let chunk_data = self.retrieve_single_chunk(chunk_hash)?;
+            reconstructed_data.extend_from_slice(&chunk_data);
+        }
+        
+        println!("DEBUG: Successfully reconstructed {} bytes from chunks", reconstructed_data.len());
+        Ok(reconstructed_data)
+    }
+
+    /// Retrieve a single chunk by hash
+    /// 
+    /// # Arguments
+    /// * `hash` - The chunk hash
+    /// 
+    /// # Returns
+    /// The chunk data
+    fn retrieve_single_chunk(&self, hash: &str) -> Result<Vec<u8>> {
+        if hash.len() < 2 {
+            return Err(anyhow!("Invalid chunk hash length"));
+        }
+        
+        let prefix = &hash[..2];
+        let suffix = &hash[2..];
+        let object_path = self.root_path.join("objects").join(prefix).join(suffix);
+        
+        match fs::read(&object_path) {
+            Ok(data) => Ok(data),
+            Err(e) => Err(anyhow!("Chunk not found: {} - {}", hash, e)),
+        }
+    }
+
+    /// Check if a hash exists in storage
+    /// 
+    /// # Arguments
+    /// * `hash` - The BLAKE3 hash to check
+    /// 
+    /// # Returns
+    /// true if the hash exists, false otherwise
+    pub fn exists(&self, hash: &str) -> bool {
+        if hash.len() < 2 {
+            return false;
+        }
+        
+        let prefix = &hash[..2];
+        let suffix = &hash[2..];
+        let object_path = self.root_path.join("objects").join(prefix).join(suffix);
+        
+        object_path.exists()
+    }
+
+    /// Chunk file data into smaller pieces
+    /// 
+    /// # Arguments
+    /// * `data` - The file data to chunk
+    /// 
+    /// # Returns
+    /// Vector of tuples containing (chunk_hash, chunk_data)
+    fn chunk_file(&self, data: &[u8]) -> Result<Vec<(String, Vec<u8>)>> {
+        let mut chunks = Vec::new();
+        
+        for (i, chunk_data) in data.chunks(CHUNK_SIZE).enumerate() {
+            let mut hasher = Hasher::new();
+            hasher.update(chunk_data);
+            let hash = hasher.finalize().to_hex().to_string();
+            chunks.push((hash, chunk_data.to_vec()));
+            println!("DEBUG: Created chunk {} ({} bytes, hash: {})", i, chunk_data.len(), &hash[..16]);
+        }
+        
+        println!("DEBUG: Chunked file into {} chunks", chunks.len());
+        Ok(chunks)
+    }
+
+    /// Create a manifest file for chunks
+    /// 
+    /// # Arguments
+    /// * `chunks` - Vector of chunk tuples (hash, data)
+    /// * `filename` - Optional original filename
+    /// 
+    /// # Returns
+    /// The manifest hash as a hex string
+    fn create_manifest(&self, chunks: &[(String, Vec<u8>)], filename: Option<String>) -> Result<String> {
+        let total_size: u64 = chunks.iter().map(|(_, data)| data.len() as u64).sum();
+        let chunk_hashes: Vec<String> = chunks.iter().map(|(hash, _)| hash.clone()).collect();
+        
+        let manifest = FileManifest {
+            total_size,
+            chunks: chunk_hashes,
+            filename,
+        };
+        
+        // Serialize manifest to JSON
+        let manifest_json = serde_json::to_string_pretty(&manifest)?;
+        println!("DEBUG: Created manifest with {} chunks, total size: {} bytes", manifest.chunks.len(), manifest.total_size);
+        
+        // Store manifest as a regular object
+        self.store_single_object(manifest_json.as_bytes())
+    }
+
+    /// Store a single chunk/object
+    /// 
+    /// # Arguments
+    /// * `hash` - The hash of the data
+    /// * `data` - The data to store
+    /// 
+    /// # Returns
+    /// Ok(()) if successful
+    fn store_single_object(&self, data: &[u8]) -> Result<String> {
         // Compute BLAKE3 hash
         let mut hasher = Hasher::new();
         hasher.update(data);
         let hash = hasher.finalize().to_hex().to_string();
         
-        println!("DEBUG: Computed hash: {}", hash);
+        println!("DEBUG: Storing object with hash: {}", hash);
         
         // Create directory structure: .fai/objects/[first-2-chars]/
         if hash.len() < 2 {
@@ -99,59 +306,6 @@ impl StorageManager {
         }
         
         Ok(hash)
-    }
-
-    /// Retrieve data by its content hash
-    /// 
-    /// # Arguments
-    /// * `hash` - The BLAKE3 hash of the data to retrieve
-    /// 
-    /// # Returns
-    /// The stored data as bytes
-    pub fn retrieve(&self, hash: &str) -> Result<Vec<u8>> {
-        println!("DEBUG: StorageManager::retrieve called with hash: {}", hash);
-        
-        if hash.len() < 2 {
-            println!("DEBUG: Invalid hash length: {}", hash.len());
-            return Err(anyhow!("Invalid hash length"));
-        }
-        
-        let prefix = &hash[..2];
-        let suffix = &hash[2..];
-        let object_path = self.root_path.join("objects").join(prefix).join(suffix);
-        
-        println!("DEBUG: Looking for object at path: {:?}", object_path);
-        println!("DEBUG: Object exists: {}", object_path.exists());
-        
-        match fs::read(&object_path) {
-            Ok(data) => {
-                println!("DEBUG: Successfully retrieved {} bytes for hash: {}", data.len(), hash);
-                Ok(data)
-            },
-            Err(e) => {
-                println!("DEBUG: Failed to retrieve object {}: {}", hash, e);
-                Err(anyhow!("Object not found: {}", hash))
-            },
-        }
-    }
-
-    /// Check if a hash exists in storage
-    /// 
-    /// # Arguments
-    /// * `hash` - The BLAKE3 hash to check
-    /// 
-    /// # Returns
-    /// true if the hash exists, false otherwise
-    pub fn exists(&self, hash: &str) -> bool {
-        if hash.len() < 2 {
-            return false;
-        }
-        
-        let prefix = &hash[..2];
-        let suffix = &hash[2..];
-        let object_path = self.root_path.join("objects").join(prefix).join(suffix);
-        
-        object_path.exists()
     }
 
     /// Store metadata for a model
