@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
             
             // Create storage manager
             let storage = Arc::new(fai_protocol::storage::StorageManager::new(
-                Path::new(".fai").join("storage")
+                Path::new(".fai")
             )?);
             
             // Create network manager
@@ -221,7 +221,7 @@ async fn main() -> Result<()> {
             
             // Create storage manager
             let storage = Arc::new(fai_protocol::storage::StorageManager::new(
-                Path::new(".fai").join("storage")
+                Path::new(".fai")
             )?);
             
             // Create network manager
@@ -322,7 +322,7 @@ async fn main() -> Result<()> {
             
             // Create storage manager
             let storage = Arc::new(fai_protocol::storage::StorageManager::new(
-                Path::new(".fai").join("storage")
+                Path::new(".fai")
             )?);
             
             // Create network manager
