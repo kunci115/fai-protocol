@@ -201,10 +201,12 @@ impl NetworkManager {
                             let data = match self.storage.retrieve(&request.hash) {
                                 Ok(data) => {
                                     println!("DEBUG: Server successfully retrieved chunk {} ({} bytes)", request.hash, data.len());
+                                    println!("DEBUG: Server sending chunk response with data");
                                     Some(data)
                                 }
                                 Err(e) => {
                                     println!("DEBUG: Server failed to retrieve chunk {}: {}", request.hash, e);
+                                    println!("DEBUG: Server sending chunk response with no data");
                                     None
                                 }
                             };
