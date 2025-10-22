@@ -62,10 +62,14 @@ impl StorageManager {
     /// # Returns
     /// The BLAKE3 hash of the stored data as a hex string
     pub fn store(&self, data: &[u8]) -> Result<String> {
+        println!("DEBUG: StorageManager::store called with {} bytes of data", data.len());
+        
         // Compute BLAKE3 hash
         let mut hasher = Hasher::new();
         hasher.update(data);
         let hash = hasher.finalize().to_hex().to_string();
+        
+        println!("DEBUG: Computed hash: {}", hash);
         
         // Create directory structure: .fai/objects/[first-2-chars]/
         if hash.len() < 2 {
@@ -75,14 +79,23 @@ impl StorageManager {
         let prefix = &hash[..2];
         let suffix = &hash[2..];
         let object_dir = self.root_path.join("objects").join(prefix);
+        
+        println!("DEBUG: Creating object directory: {:?}", object_dir);
         fs::create_dir_all(&object_dir)?;
         
         // Write data to: .fai/objects/[first-2-chars]/[rest-of-hash]
         let object_path = object_dir.join(suffix);
         
+        println!("DEBUG: Object path: {:?}", object_path);
+        println!("DEBUG: Object already exists: {}", object_path.exists());
+        
         // Only write if file doesn't already exist (idempotent operation)
         if !object_path.exists() {
+            println!("DEBUG: Writing {} bytes to object file", data.len());
             fs::write(&object_path, data)?;
+            println!("DEBUG: Successfully wrote object file");
+        } else {
+            println!("DEBUG: Object file already exists, skipping write");
         }
         
         Ok(hash)
@@ -96,7 +109,10 @@ impl StorageManager {
     /// # Returns
     /// The stored data as bytes
     pub fn retrieve(&self, hash: &str) -> Result<Vec<u8>> {
+        println!("DEBUG: StorageManager::retrieve called with hash: {}", hash);
+        
         if hash.len() < 2 {
+            println!("DEBUG: Invalid hash length: {}", hash.len());
             return Err(anyhow!("Invalid hash length"));
         }
         
@@ -104,9 +120,18 @@ impl StorageManager {
         let suffix = &hash[2..];
         let object_path = self.root_path.join("objects").join(prefix).join(suffix);
         
+        println!("DEBUG: Looking for object at path: {:?}", object_path);
+        println!("DEBUG: Object exists: {}", object_path.exists());
+        
         match fs::read(&object_path) {
-            Ok(data) => Ok(data),
-            Err(_) => Err(anyhow!("Object not found: {}", hash)),
+            Ok(data) => {
+                println!("DEBUG: Successfully retrieved {} bytes for hash: {}", data.len(), hash);
+                Ok(data)
+            },
+            Err(e) => {
+                println!("DEBUG: Failed to retrieve object {}: {}", hash, e);
+                Err(anyhow!("Object not found: {}", hash))
+            },
         }
     }
 

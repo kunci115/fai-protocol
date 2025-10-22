@@ -90,19 +90,25 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Extract hash from output
-FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '([a-f0-9]\{8\})' | sed 's/[()]*//g' | head -n1)
+# Extract hash from output (full hash, not just 8 characters)
+FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '([a-f0-9]\{64\})' | sed 's/[()]*//g' | head -n1)
 if [ -z "$FILE_HASH" ]; then
-    # Try alternative format if the first pattern doesn't match
-    FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{8\}' | head -n1)
+    # Try alternative format - look for any 64-character hex string
+    FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{64\}' | head -n1)
+fi
+if [ -z "$FILE_HASH" ]; then
+    # Fallback: try to extract any hash-like string and take the first one
+    FILE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{8,\}' | head -n1)
 fi
 if [ -z "$FILE_HASH" ]; then
     print_error "Could not extract file hash from output"
+    echo "Add output was:"
     echo "$ADD_OUTPUT"
     exit 1
 fi
 
 print_success "Test file hash: $FILE_HASH"
+echo "Hash length: ${#FILE_HASH}"
 
 # Step 5: Start FAI server in background
 print_step "Step 5: Starting FAI server"
@@ -239,8 +245,8 @@ else
     echo -e "\n${RED}✗ Server never sent chunk response${NC}"
 fi
 
-# Check if fetched file exists
-FETCHED_FILE="fetched_${FILE_HASH:0:8}.dat"
+# Check if fetched file exists (use full hash for filename)
+FETCHED_FILE="fetched_${FILE_HASH}.dat"
 if [ ! -f "$FETCHED_FILE" ]; then
     print_error "Fetched file not found: $FETCHED_FILE"
     cat "$FETCH_LOG"
