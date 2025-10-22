@@ -298,13 +298,18 @@ async fn main() -> Result<()> {
                 Ok(Some(data)) => {
                     println!("✓ Received {} bytes", data.len());
                     
-                    // Save to file
-                    let filename = format!("fetched_{}.dat", &hash[..8]);
-                    std::fs::write(&filename, data)?;
+                    // Save to file using full hash
+                    let filename = format!("fetched_{}.dat", hash);
+                    let absolute_path = std::env::current_dir().unwrap().join(&filename);
+                    println!("DEBUG: Saving to absolute path: {:?}", absolute_path);
                     
+                    std::fs::write(&filename, data)?;
+                    println!("DEBUG: File written successfully");
                     println!("Saved to: {}", filename);
+                    println!("DEBUG: File exists: {}", std::path::Path::new(&filename).exists());
                 }
                 Ok(None) => {
+                    println!("DEBUG: Chunk {} not available from peer {}", hash, peer_id);
                     return Err(anyhow::anyhow!("✗ Chunk not available from peer {}", peer_id));
                 }
                 Err(e) => {

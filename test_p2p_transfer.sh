@@ -35,6 +35,10 @@ cleanup() {
     rm -f "$SERVE_LOG" "$FETCH_LOG"
     rm -rf .fai
     
+    # Show what files remain before final cleanup (for debugging)
+    echo "DEBUG: Files remaining in directory before final cleanup:"
+    ls -la *.dat 2>/dev/null || echo "No .dat files found"
+    
     echo -e "${GREEN}Cleanup complete${NC}"
 }
 
