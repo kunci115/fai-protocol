@@ -78,6 +78,7 @@ impl StorageManager {
     /// For large files (>1MB), returns the manifest hash
     pub fn store(&self, data: &[u8]) -> Result<String> {
         println!("DEBUG: StorageManager::store called with {} bytes of data", data.len());
+        println!("DEBUG: CHUNK_SIZE = {} bytes", CHUNK_SIZE);
         
         // Check if file needs to be chunked
         if data.len() > CHUNK_SIZE {
@@ -85,21 +86,26 @@ impl StorageManager {
             
             // Chunk the file
             let chunks = self.chunk_file(data)?;
+            println!("DEBUG: Created {} chunks total", chunks.len());
             
             // Store each chunk
             for (i, (chunk_hash, chunk_data)) in chunks.iter().enumerate() {
-                println!("DEBUG: Storing chunk {}/{} (hash: {})", i + 1, chunks.len(), &chunk_hash[..16]);
-                self.store_single_object(chunk_data)?; // Store will compute hash again
+                println!("DEBUG: Storing chunk {}/{} (hash: {}, size: {} bytes)", 
+                        i + 1, chunks.len(), &chunk_hash[..16], chunk_data.len());
+                let stored_hash = self.store_single_object(chunk_data)?;
+                println!("DEBUG: Chunk {} stored with hash: {}", i + 1, &stored_hash[..16]);
             }
             
             // Create and store manifest
             let manifest_hash = self.create_manifest(&chunks, None)?;
-            println!("DEBUG: Stored large file with manifest hash: {} ({} chunks)", &manifest_hash[..16], chunks.len());
+            println!("DEBUG: Stored large file with manifest hash: {} ({} chunks)", 
+                    &manifest_hash[..16], chunks.len());
             
             Ok(manifest_hash)
         } else {
             // Small file - store as single object
-            println!("DEBUG: Small file detected, storing as single object");
+            println!("DEBUG: Small file detected ({} bytes <= {} bytes), storing as single object", 
+                    data.len(), CHUNK_SIZE);
             self.store_single_object(data)
         }
     }
@@ -156,20 +162,35 @@ impl StorageManager {
     /// # Returns
     /// Reconstructed file data
     fn reconstruct_from_manifest(&self, manifest_str: &str) -> Result<Vec<u8>> {
+        println!("DEBUG: Starting manifest reconstruction");
+        println!("DEBUG: Manifest JSON: {}", manifest_str);
+        
         let manifest: FileManifest = serde_json::from_str(manifest_str)?;
-        println!("DEBUG: Reconstructing file from {} chunks (total size: {} bytes)", 
+        println!("DEBUG: Parsed manifest: {} chunks, total size: {} bytes", 
                 manifest.chunks.len(), manifest.total_size);
         
         let mut reconstructed_data = Vec::with_capacity(manifest.total_size as usize);
+        println!("DEBUG: Allocated reconstruction buffer with capacity: {} bytes", manifest.total_size);
         
         for (i, chunk_hash) in manifest.chunks.iter().enumerate() {
             println!("DEBUG: Retrieving chunk {}/{} (hash: {})", i + 1, manifest.chunks.len(), &chunk_hash[..16]);
             
             let chunk_data = self.retrieve_single_chunk(chunk_hash)?;
+            println!("DEBUG: Retrieved chunk {} (size: {} bytes)", i + 1, chunk_data.len());
+            
             reconstructed_data.extend_from_slice(&chunk_data);
+            println!("DEBUG: Reconstruction progress: {}/{} chunks, current size: {} bytes", 
+                    i + 1, manifest.chunks.len(), reconstructed_data.len());
         }
         
-        println!("DEBUG: Successfully reconstructed {} bytes from chunks", reconstructed_data.len());
+        println!("DEBUG: Successfully reconstructed {} bytes from {} chunks", 
+                reconstructed_data.len(), manifest.chunks.len());
+        
+        if reconstructed_data.len() != manifest.total_size as usize {
+            println!("DEBUG: WARNING: Reconstructed size mismatch! Expected: {}, Got: {}", 
+                    manifest.total_size, reconstructed_data.len());
+        }
+        
         Ok(reconstructed_data)
     }
 
