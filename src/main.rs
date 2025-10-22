@@ -253,7 +253,7 @@ async fn main() -> Result<()> {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
             
-            println!("DEBUG: Discovery time elapsed, checking results...");
+            println!("DEBUG: Discovery time elapsed ({} seconds), checking results...", discovery_duration.as_secs());
             println!("DEBUG: About to check discovered peers...");
             
             // Check if target peer was discovered
