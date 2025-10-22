@@ -5,7 +5,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use libp2p::PeerId;
 use fai_protocol::FaiProtocol;
-use tokio::task::JoinSet;
 
 #[derive(Parser)]
 #[command(name = "fai")]
@@ -349,7 +348,8 @@ async fn main() -> Result<()> {
                     .map(|c| c.clone())
                     .unwrap_or_default();
                 
-                if let Some(chunks) = chunks_array.as_array() {
+                // Iterate over chunks instead of using as_array()
+                for (i, chunk_value) in chunks_array.iter().enumerate() {
                     let total_chunks = chunks.len();
                     println!("Downloading {} chunks in parallel...", total_chunks);
                     
