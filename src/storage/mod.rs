@@ -85,6 +85,7 @@ impl StorageManager {
             let total_chunks = (data.len() + CHUNK_SIZE - 1) / CHUNK_SIZE;
             println!("SPLITTING: Large file detected ({} bytes > {} bytes)", data.len(), CHUNK_SIZE);
             println!("SPLITTING: Will create {} chunks of {} bytes each", total_chunks, CHUNK_SIZE);
+            println!("Splitting file into {} chunks...", total_chunks);
             
             // Chunk the file
             let chunks = self.chunk_file(data)?;
@@ -95,12 +96,14 @@ impl StorageManager {
                 println!("CHUNK {}: Storing chunk {}/{} (hash: {}, size: {} bytes)", 
                         i, i + 1, chunks.len(), &chunk_hash[..16], chunk_data.len());
                 let stored_hash = self.store_single_object(chunk_data)?;
+                println!("Stored chunk {}: {} ({} bytes)", i, chunk_hash, chunk_data.len());
                 println!("CHUNK {}: Stored with hash: {}", i, &stored_hash[..16]);
             }
             
             // Create and store manifest
             println!("MANIFEST: Creating manifest for {} chunks", chunks.len());
             let manifest_hash = self.create_manifest(&chunks, None)?;
+            println!("Created manifest: {}", manifest_hash);
             println!("MANIFEST: Created manifest with hash: {}", &manifest_hash[..16]);
             println!("MANIFEST: Stored large file successfully ({} chunks -> manifest)", chunks.len());
             

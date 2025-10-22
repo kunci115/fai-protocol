@@ -27,6 +27,7 @@ echo "$ADD_OUTPUT"
 # Extract manifest hash (last hash in output for chunked files)
 LARGE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{64\}' | tail -n1)
 echo "Large file hash: $LARGE_HASH"
+echo "Hash type: MANIFEST (should reconstruct complete file)"
 
 # Check storage structure
 echo ""

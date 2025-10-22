@@ -359,11 +359,13 @@ async fn main() -> Result<()> {
             // Initialize FAI protocol
             let fai = FaiProtocol::new()?;
             
-            // Check if this is a manifest file by trying to retrieve and parse it
-            match fai.storage().retrieve(&hash) {
-                Ok(data) => {
-                    // Try to parse as JSON to see if it's a manifest
-                    if let Ok(manifest_str) = std::str::from_utf8(&data) {
+            // Check if this is a manifest file by reading it directly without reconstruction
+            let manifest_path = format!(".fai/objects/{}/{}", &hash[..2], &hash[2..]);
+            
+            if std::path::Path::new(&manifest_path).exists() {
+                // Read the raw file to see if it's a manifest
+                if let Ok(raw_data) = std::fs::read(&manifest_path) {
+                    if let Ok(manifest_str) = std::str::from_utf8(&raw_data) {
                         if manifest_str.trim_start().starts_with('{') {
                             // This is a manifest file
                             if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(manifest_str) {
@@ -393,22 +395,37 @@ async fn main() -> Result<()> {
                             }
                         } else {
                             // This is a single chunk file
-                            println!("File: single-chunk file");
-                            println!("Hash: {} ({})", hash, &hash[..8]);
-                            println!("Size: {} bytes ({:.2} MB)", data.len(), data.len() as f64 / 1_048_576.0);
-                            println!("Chunks: 1 (this is a single chunk file)");
+                            match fai.storage().retrieve(&hash) {
+                                Ok(data) => {
+                                    println!("File: single-chunk file");
+                                    println!("Hash: {} ({})", hash, &hash[..8]);
+                                    println!("Size: {} bytes ({:.2} MB)", data.len(), data.len() as f64 / 1_048_576.0);
+                                    println!("Chunks: 1 (this is a single chunk file)");
+                                }
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!("Failed to retrieve file: {}", e));
+                                }
+                            }
                         }
                     } else {
                         // Binary data, treat as single chunk
-                        println!("File: single-chunk file");
-                        println!("Hash: {} ({})", hash, &hash[..8]);
-                        println!("Size: {} bytes ({:.2} MB)", data.len(), data.len() as f64 / 1_048_576.0);
-                        println!("Chunks: 1 (this is a single chunk file)");
+                        match fai.storage().retrieve(&hash) {
+                            Ok(data) => {
+                                println!("File: single-chunk file");
+                                println!("Hash: {} ({})", hash, &hash[..8]);
+                                println!("Size: {} bytes ({:.2} MB)", data.len(), data.len() as f64 / 1_048_576.0);
+                                println!("Chunks: 1 (this is a single chunk file)");
+                            }
+                            Err(e) => {
+                                return Err(anyhow::anyhow!("Failed to retrieve file: {}", e));
+                            }
+                        }
                     }
+                } else {
+                    return Err(anyhow::anyhow!("Failed to read manifest file"));
                 }
-                Err(e) => {
-                    return Err(anyhow::anyhow!("Failed to retrieve file: {}", e));
-                }
+            } else {
+                return Err(anyhow::anyhow!("File not found in storage"));
             }
         }
         Commands::Serve => {
