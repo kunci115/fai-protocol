@@ -24,8 +24,8 @@ echo "=== ADDING FILE TO STORAGE ==="
 ADD_OUTPUT=$(cargo run -- add test_large.bin 2>&1)
 echo "$ADD_OUTPUT"
 
-# Extract hash
-LARGE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{64\}' | head -n1)
+# Extract manifest hash (last hash in output for chunked files)
+LARGE_HASH=$(echo "$ADD_OUTPUT" | grep -o '[a-f0-9]\{64\}' | tail -n1)
 echo "Large file hash: $LARGE_HASH"
 
 # Check storage structure

@@ -42,6 +42,8 @@ enum Commands {
     },
     /// Start server to serve chunks to other peers
     Serve,
+    /// List chunks for a multi-chunk file
+    Chunks { hash: String },
 }
 
 #[tokio::main]
@@ -345,6 +347,67 @@ async fn main() -> Result<()> {
                 }
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to fetch chunk: {}", e));
+                }
+            }
+        }
+        Commands::Chunks { hash } => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            // Initialize FAI protocol
+            let fai = FaiProtocol::new()?;
+            
+            // Check if this is a manifest file by trying to retrieve and parse it
+            match fai.storage().retrieve(&hash) {
+                Ok(data) => {
+                    // Try to parse as JSON to see if it's a manifest
+                    if let Ok(manifest_str) = std::str::from_utf8(&data) {
+                        if manifest_str.trim_start().starts_with('{') {
+                            // This is a manifest file
+                            if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(manifest_str) {
+                                println!("File: multi-chunk file (manifest: {}{})", &hash[..8], &hash[8..16]);
+                                println!("Chunks:");
+                                
+                                if let Some(chunks) = manifest.get("chunks").and_then(|c| c.as_array()) {
+                                    for (i, chunk) in chunks.iter().enumerate() {
+                                        if let Some(chunk_hash) = chunk.as_str() {
+                                            if let Some(chunk_data) = fai.storage().retrieve(chunk_hash).ok() {
+                                                println!("  {}: {} ({} bytes)", i, chunk_hash, chunk_data.len());
+                                            } else {
+                                                println!("  {}: {} (not found in storage)", i, chunk_hash);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if let Some(total_size) = manifest.get("total_size").and_then(|s| s.as_u64()) {
+                                    println!("Total: {} chunks, {} bytes ({:.2} MB)", 
+                                        manifest.get("chunks").and_then(|c| c.as_array()).map(|c| c.len()).unwrap_or(0),
+                                        total_size, total_size as f64 / 1_048_576.0);
+                                }
+                            } else {
+                                println!("Error: Invalid manifest format");
+                                return Err(anyhow::anyhow!("Invalid manifest format"));
+                            }
+                        } else {
+                            // This is a single chunk file
+                            println!("File: single-chunk file");
+                            println!("Hash: {} ({})", hash, &hash[..8]);
+                            println!("Size: {} bytes ({:.2} MB)", data.len(), data.len() as f64 / 1_048_576.0);
+                            println!("Chunks: 1 (this is a single chunk file)");
+                        }
+                    } else {
+                        // Binary data, treat as single chunk
+                        println!("File: single-chunk file");
+                        println!("Hash: {} ({})", hash, &hash[..8]);
+                        println!("Size: {} bytes ({:.2} MB)", data.len(), data.len() as f64 / 1_048_576.0);
+                        println!("Chunks: 1 (this is a single chunk file)");
+                    }
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to retrieve file: {}", e));
                 }
             }
         }
