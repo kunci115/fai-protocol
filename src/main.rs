@@ -65,7 +65,11 @@ async fn main() -> Result<()> {
                 return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
             }
             
+            // Read file first to show size info
+            let file_data = std::fs::read(&path)?;
+            let file_size = file_data.len();
             println!("Adding {} to staging area...", path);
+            println!("File size: {} bytes ({:.2} MB)", file_size, file_size as f64 / 1_048_576.0);
             
             // Initialize FAI protocol
             let fai = FaiProtocol::new()?;
@@ -73,7 +77,34 @@ async fn main() -> Result<()> {
             // Add file to staging
             let hash = fai.add_file(&path)?;
             
-            println!("Added {} ({})", path, &hash[..8]);
+            // Determine if this was a chunked file by checking if manifest exists
+            let manifest_path = format!(".fai/objects/{}/{}", &hash[..2], &hash[2..]);
+            if std::path::Path::new(&manifest_path).exists() {
+                if let Ok(manifest_data) = std::fs::read(&manifest_path) {
+                    if let Ok(manifest_str) = std::str::from_utf8(&manifest_data) {
+                        if manifest_str.trim_start().starts_with('{') {
+                            println!("✓ File was chunked into multiple pieces");
+                            println!("  Manifest hash: {} ({})", hash, &hash[..8]);
+                            if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(manifest_str) {
+                                if let Some(chunks) = manifest.get("chunks").and_then(|c| c.as_array()) {
+                                    println!("  Number of chunks: {}", chunks.len());
+                                    for (i, chunk) in chunks.iter().enumerate() {
+                                        if let Some(chunk_hash) = chunk.as_str() {
+                                            println!("  Chunk {}: {} ({})", i, chunk_hash, &chunk_hash[..8]);
+                                        }
+                                    }
+                                }
+                                if let Some(total_size) = manifest.get("total_size").and_then(|s| s.as_u64()) {
+                                    println!("  Total size: {} bytes ({:.2} MB)", total_size, total_size as f64 / 1_048_576.0);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                println!("✓ File stored as single object");
+                println!("  File hash: {} ({})", hash, &hash[..8]);
+            }
         }
         Commands::Commit { message } => {
             // Check if repository is initialized

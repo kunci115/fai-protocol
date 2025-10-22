@@ -82,31 +82,36 @@ impl StorageManager {
         
         // Check if file needs to be chunked
         if data.len() > CHUNK_SIZE {
-            println!("DEBUG: Large file detected ({} bytes > {} bytes), chunking...", data.len(), CHUNK_SIZE);
+            let total_chunks = (data.len() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+            println!("SPLITTING: Large file detected ({} bytes > {} bytes)", data.len(), CHUNK_SIZE);
+            println!("SPLITTING: Will create {} chunks of {} bytes each", total_chunks, CHUNK_SIZE);
             
             // Chunk the file
             let chunks = self.chunk_file(data)?;
-            println!("DEBUG: Created {} chunks total", chunks.len());
+            println!("SPLITTING: Created {} chunks total", chunks.len());
             
             // Store each chunk
             for (i, (chunk_hash, chunk_data)) in chunks.iter().enumerate() {
-                println!("DEBUG: Storing chunk {}/{} (hash: {}, size: {} bytes)", 
-                        i + 1, chunks.len(), &chunk_hash[..16], chunk_data.len());
+                println!("CHUNK {}: Storing chunk {}/{} (hash: {}, size: {} bytes)", 
+                        i, i + 1, chunks.len(), &chunk_hash[..16], chunk_data.len());
                 let stored_hash = self.store_single_object(chunk_data)?;
-                println!("DEBUG: Chunk {} stored with hash: {}", i + 1, &stored_hash[..16]);
+                println!("CHUNK {}: Stored with hash: {}", i, &stored_hash[..16]);
             }
             
             // Create and store manifest
+            println!("MANIFEST: Creating manifest for {} chunks", chunks.len());
             let manifest_hash = self.create_manifest(&chunks, None)?;
-            println!("DEBUG: Stored large file with manifest hash: {} ({} chunks)", 
-                    &manifest_hash[..16], chunks.len());
+            println!("MANIFEST: Created manifest with hash: {}", &manifest_hash[..16]);
+            println!("MANIFEST: Stored large file successfully ({} chunks -> manifest)", chunks.len());
             
             Ok(manifest_hash)
         } else {
             // Small file - store as single object
-            println!("DEBUG: Small file detected ({} bytes <= {} bytes), storing as single object", 
-                    data.len(), CHUNK_SIZE);
-            self.store_single_object(data)
+            println!("SINGLE: Small file detected ({} bytes <= {} bytes)", data.len(), CHUNK_SIZE);
+            println!("SINGLE: Storing as single object");
+            let hash = self.store_single_object(data)?;
+            println!("SINGLE: Stored with hash: {}", &hash[..16]);
+            Ok(hash)
         }
     }
 
@@ -269,6 +274,11 @@ impl StorageManager {
         let total_size: u64 = chunks.iter().map(|(_, data)| data.len() as u64).sum();
         let chunk_hashes: Vec<String> = chunks.iter().map(|(hash, _)| hash.clone()).collect();
         
+        println!("MANIFEST: Building manifest with {} chunks", chunks.len());
+        for (i, (hash, data)) in chunks.iter().enumerate() {
+            println!("MANIFEST:   Chunk {} -> {} ({} bytes)", i, &hash[..16], data.len());
+        }
+        
         let manifest = FileManifest {
             total_size,
             chunks: chunk_hashes,
@@ -277,7 +287,8 @@ impl StorageManager {
         
         // Serialize manifest to JSON
         let manifest_json = serde_json::to_string_pretty(&manifest)?;
-        println!("DEBUG: Created manifest with {} chunks, total size: {} bytes", manifest.chunks.len(), manifest.total_size);
+        println!("MANIFEST: JSON size: {} bytes", manifest_json.len());
+        println!("MANIFEST: Total file size: {} bytes ({:.2} MB)", total_size, total_size as f64 / 1_048_576.0);
         
         // Store manifest as a regular object
         self.store_single_object(manifest_json.as_bytes())
