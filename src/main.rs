@@ -687,7 +687,7 @@ async fn main() -> Result<()> {
             println!("Found {} commits to pull", commits.len());
             
             // For each commit, pull the files
-            for commit in commits {
+            for commit in &commits {
                 println!("Pulling commit: {} - {}", &commit.hash[..8], commit.message);
                 
                 // Download all files referenced in this commit
@@ -716,7 +716,7 @@ async fn main() -> Result<()> {
                 }
                 
                 // Save the commit to local database
-                storage.save_remote_commit(&commit)?;
+                storage.save_remote_commit(commit)?;
                 println!("✓ Pulled commit: {}", &commit.hash[..8]);
             }
             
