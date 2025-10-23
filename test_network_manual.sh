@@ -42,11 +42,21 @@ if grep -q "Local peer ID:" server.log; then
     echo
     echo "Testing peer discovery from test_repo2..."
     cd ../test_repo2
-    timeout 8 cargo run -- peers || echo "Peer discovery completed"
-
+    echo "Running: cargo run -- peers"
+    cargo run -- peers &
+    PEERS_PID=$!
+    sleep 8
+    kill $PEERS_PID 2>/dev/null || true
+    echo "Peer discovery completed"
+    
     echo
     echo "Testing simple fetch operation..."
-    timeout 10 cargo run -- fetch "$PEER_ID" "$REPO1_COMMIT" || echo "Fetch operation completed"
+    echo "Running: cargo run -- fetch $PEER_ID $REPO1_COMMIT"
+    cargo run -- fetch "$PEER_ID" "$REPO1_COMMIT" &
+    FETCH_PID=$!
+    sleep 10
+    kill $FETCH_PID 2>/dev/null || true
+    echo "Fetch operation completed"
 else
     echo "ERROR: Server failed to start"
     cat server.log
