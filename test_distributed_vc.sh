@@ -111,7 +111,7 @@ else
 fi
 
 print_info "Creating initial commit..."
-COMMIT1=$(cargo run -- commit "Initial commit - v1.0" 2>/dev/null | grep -o '[a-f0-9]\{64\}' | head -n1 || echo "")
+COMMIT1=$(cargo run -- commit "Initial commit - v1.0" | grep -o '[a-f0-9]\{64\}' | head -n1 || echo "")
 if [ ! -z "$COMMIT1" ]; then
     print_status "Repo1 initial commit: ${COMMIT1:0:8}"
 else
@@ -128,7 +128,7 @@ else
 fi
 
 print_info "Creating second commit..."
-COMMIT2=$(cargo run -- commit "Updated model - v1.1" 2>/dev/null | grep -o '[a-f0-9]\{64\}' | head -n1 || echo "")
+COMMIT2=$(cargo run -- commit "Updated model - v1.1" | grep -o '[a-f0-9]\{64\}' | head -n1 || echo "")
 if [ ! -z "$COMMIT2" ]; then
     print_status "Repo1 second commit: ${COMMIT2:0:8}"
 else
@@ -153,10 +153,15 @@ else
     exit 1
 fi
 
-if cargo run -- commit "Repo2 initial commit" > /dev/null 2>&1; then
+print_info "Attempting to create commit in repo2..."
+if cargo run -- commit "Repo2 initial commit"; then
     print_status "Repo2 initial commit created"
 else
     print_error "Failed to create commit in repo2"
+    print_info "Let's check what files are staged in repo2:"
+    cd repo2
+    cargo run -- status || echo "Status command failed"
+    cd ..
     exit 1
 fi
 
