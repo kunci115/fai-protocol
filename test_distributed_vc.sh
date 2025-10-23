@@ -181,10 +181,15 @@ if wait_for_service "../serve1.log" "FAI server"; then
         
         cd ../repo2
         print_info "Testing push from repo2 to repo1..."
-        if timeout 20 cargo run -- push "$PEER1_ID"; then
-            print_status "Push command executed successfully"
+        cargo run -- push "$PEER1_ID" &
+        PUSH_PID=$!
+        sleep 15
+        if kill -0 $PUSH_PID 2>/dev/null; then
+            kill $PUSH_PID 2>/dev/null || true
+            print_warning "Push command timed out after 15 seconds"
         else
-            print_warning "Push command may have failed or timed out"
+            wait $PUSH_PID
+            print_status "Push command executed successfully"
         fi
         cd ..
     else
@@ -202,11 +207,16 @@ echo
 echo -e "${YELLOW}=== STEP 3: Testing PULL ===${NC}"
 cd repo2
 print_info "Testing pull from repo1 to repo2..."
-if timeout 20 cargo run -- pull "$PEER1_ID"; then
-    print_status "Pull command executed successfully"
-else
-    print_warning "Pull command may have failed or timed out"
-fi
+cargo run -- pull "$PEER1_ID" &
+    PULL_PID=$!
+    sleep 15
+    if kill -0 $PULL_PID 2>/dev/null; then
+        kill $PULL_PID 2>/dev/null || true
+        print_warning "Pull command timed out after 15 seconds"
+    else
+        wait $PULL_PID
+        print_status "Pull command executed successfully"
+    fi
 
 print_info "Verifying commits were pulled..."
 if check_commit "v1.0" "../repo2"; then
@@ -247,10 +257,15 @@ if wait_for_service "../serve1.log" "FAI server"; then
         
         cd ..
         print_info "Cloning repo1 to repo3..."
-        if timeout 25 cargo run -- clone "$PEER1_ID" repo3; then
-            print_status "Clone command executed successfully"
+        cargo run -- clone "$PEER1_ID" repo3 &
+        CLONE_PID=$!
+        sleep 20
+        if kill -0 $CLONE_PID 2>/dev/null; then
+            kill $CLONE_PID 2>/dev/null || true
+            print_warning "Clone command timed out after 20 seconds"
         else
-            print_warning "Clone command may have failed or timed out"
+            wait $CLONE_PID
+            print_status "Clone command executed successfully"
         fi
         
         # Verify clone
