@@ -348,60 +348,56 @@ async fn main() -> Result<()> {
                     .map(|c| c.clone())
                     .unwrap_or_default();
                 
-                // Iterate over chunks instead of using as_array()
+                let total_chunks = chunks_array.len();
+                println!("Downloading {} chunks...", total_chunks);
+                
+                // Pre-allocate vector for chunk data in correct order
+                let mut chunks_data: Vec<Option<Vec<u8>>> = vec![None; total_chunks];
+                
+                // Download chunks sequentially for now (parallel version would require more complex async handling)
                 for (i, chunk_value) in chunks_array.iter().enumerate() {
-                    let total_chunks = chunks_array.len();
-                    println!("Downloading {} chunks in parallel...", total_chunks);
-                    
-                    // Pre-allocate vector for chunk data in correct order
-                    let mut chunks_data: Vec<Option<Vec<u8>>> = vec![None; total_chunks];
-                    
-                    // Download chunks sequentially for now (parallel version would require more complex async handling)
-                    for (i, chunk_value) in chunks_array.iter().enumerate() {
-                        if let Some(chunk_hash) = chunk_value.as_str() {
-                            println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &chunk_hash[..8]);
-                            match network_manager.request_chunk(target_peer.clone(), chunk_hash).await {
-                                Ok(Some(data)) => {
-                                    println!("✓ Downloaded chunk {} ({} bytes)", i + 1, data.len());
-                                    chunks_data[i] = Some(data);
-                                }
-                                Ok(None) => {
-                                    return Err(anyhow::anyhow!("✗ Chunk {} not available from peer", i + 1));
-                                }
-                                Err(e) => {
-                                    return Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e));
-                                }
+                    if let Some(chunk_hash) = chunk_value.as_str() {
+                        println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &chunk_hash[..8]);
+                        match network_manager.request_chunk(target_peer.clone(), chunk_hash).await {
+                            Ok(Some(data)) => {
+                                println!("✓ Downloaded chunk {} ({} bytes)", i + 1, data.len());
+                                chunks_data[i] = Some(data);
+                            }
+                            Ok(None) => {
+                                return Err(anyhow::anyhow!("✗ Chunk {} not available from peer", i + 1));
+                            }
+                            Err(e) => {
+                                return Err(anyhow::anyhow!("Failed to fetch chunk {}: {}", i + 1, e));
                             }
                         }
                     }
-                    
-                    println!("✓ All {} chunks downloaded", total_chunks);
-                    
-                    // Verify all chunks were downloaded
-                    for (i, chunk_data) in chunks_data.iter().enumerate() {
-                        if chunk_data.is_none() {
-                            return Err(anyhow::anyhow!("Chunk {} failed to download", i + 1));
-                        }
+                }
+                
+                println!("✓ All {} chunks downloaded", total_chunks);
+                
+                // Verify all chunks were downloaded
+                for (i, chunk_data) in chunks_data.iter().enumerate() {
+                    if chunk_data.is_none() {
+                        return Err(anyhow::anyhow!("Chunk {} failed to download", i + 1));
                     }
-                    
-                    println!("✓ All {} chunks downloaded", total_chunks);
-                    
-                    // Assemble complete file
-                    println!("Assembling complete file from {} chunks...", total_chunks);
-                    let mut complete_data = Vec::new();
-                    for chunk_data in chunks_data {
-                        if let Some(data) = chunk_data {
-                            complete_data.extend_from_slice(&data);
-                        }
+                }
+                
+                // Assemble complete file
+                println!("Assembling complete file from {} chunks...", total_chunks);
+                let mut complete_data = Vec::new();
+                for chunk_data in chunks_data {
+                    if let Some(data) = chunk_data {
+                        complete_data.extend_from_slice(&data);
                     }
-                    
-                    // Save complete file
-                    let filename = format!("fetched_{}.dat", hash);
-                    let complete_data_len = complete_data.len();
-                    std::fs::write(&filename, complete_data)?;
-                    
-                    println!("✓ Assembled complete file ({} bytes)", complete_data_len);
-                    println!("Saved to: {}", filename);
+                }
+                
+                // Save complete file
+                let filename = format!("fetched_{}.dat", hash);
+                let complete_data_len = complete_data.len();
+                std::fs::write(&filename, complete_data)?;
+                
+                println!("✓ Assembled complete file ({} bytes)", complete_data_len);
+                println!("Saved to: {}", filename);
 
             } else {
                 // Single chunk file
