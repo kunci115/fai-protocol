@@ -513,9 +513,10 @@ impl StorageManager {
             )?;
             
             let file_rows = file_stmt.query([hash])?;
-            let file_hashes: Result<Vec<String>, _> = file_rows
-                .map(|row| row.get(0))
-                .collect();
+            let mut file_hashes = Vec::new();
+            while let Some(row) = file_rows.next()? {
+                file_hashes.push(row.get(0)?);
+            }
             
             Ok(Some(CommitInfo {
                 hash,
