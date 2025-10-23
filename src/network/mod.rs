@@ -647,19 +647,13 @@ impl NetworkManager {
                                     libp2p::request_response::Message::Response { 
                                         request_id: response_id, 
                                         response 
-                                    } if response_id == request_id => {
-                                        println!("DEBUG: Received matching commit response for request {:?}: {} commits", 
+                                    } => {
+                                        println!("DEBUG: Received commit response for request {:?}: {} commits", 
                                             response_id, response.commits.len());
                                         for (i, commit) in response.commits.iter().enumerate() {
                                             println!("DEBUG: Commit {}: {} - {}", i, &commit.hash[..8], commit.message);
                                         }
                                         return Ok(response.commits);
-                                    }
-                                    libp2p::request_response::Message::Response { 
-                                        request_id: response_id, 
-                                        response 
-                                    } => {
-                                        println!("DEBUG: Received non-matching commit response for request {:?}: {} commits", response_id, response.commits.len());
                                     }
                                     libp2p::request_response::Message::Request { 
                                         request, 
