@@ -12,7 +12,31 @@ keywords = ["version-control", "distributed", "p2p", "ai", "models"]
 categories = ["development-tools", "network-programming"]
 readme = "README.md"
 
+# Exclude large files from package
+exclude = [
+    "target/**",
+    "tests/**",
+    "*.profraw",
+    "examples/**",
+    "benches/**",
+    "docs/**",
+    ".git/**",
+    ".idea/**",
+    "*.log",
+    "Cargo.lock",
+    ".env",
+    "PUBLISHING.md",
+    "publish_to_crates.sh"
+]
+
 [dependencies]
+
+# Optimize for smaller binary size
+[profile.release]
+lto = true          # Enable Link-Time Optimization (LTO)
+codegen-units = "single" # Single compilation unit for better optimization
+panic = "abort"      # Remove panic handling code
+strip = true          # Remove debug symbols
 clap = { version = "4.4", features = ["derive", "cargo"] }
 clap_complete = "4.5"
 blake3 = "1.5"
