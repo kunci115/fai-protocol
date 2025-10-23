@@ -96,7 +96,7 @@ cd fai-protocol
 cargo install --path .
 ```
 
-### Using Cargo (Coming Soon)
+### Using Cargo (Available Now)
 ```bash
 cargo install fai-protocol
 ```
