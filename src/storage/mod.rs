@@ -50,6 +50,9 @@ pub struct CommitInfo {
     pub timestamp: i64,
     /// List of file hashes included in this commit
     pub file_hashes: Vec<String>,
+    /// Whether this is a merge commit
+    #[serde(default)]
+    pub is_merge: bool,
 }
 
 /// Storage manager for AI models

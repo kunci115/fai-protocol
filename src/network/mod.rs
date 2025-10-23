@@ -900,8 +900,9 @@ impl NetworkManager {
                     if let Err(e) = self.database.create_commit(
                         &commit.hash,
                         &commit.message,
-                        None, // No parent info available in CommitInfo
-                        &files
+                        &[], // No parent info available in CommitInfo
+                        &files,
+                        commit.is_merge // Use is_merge flag from commit
                     ) {
                         println!("Warning: Failed to store commit {}: {}", commit.hash, e);
                     }

@@ -16,15 +16,36 @@ pub struct Commit {
     pub message: String,
     /// Commit timestamp
     pub timestamp: DateTime<Utc>,
-    /// Parent commit hash (None for initial commit)
-    pub parent_hash: Option<String>,
+    /// Whether this is a merge commit
+    pub is_merge: bool,
+    /// Parent commit hashes (empty for initial commit, multiple for merge commits)
+    pub parents: Vec<String>,
 }
 
-/// Database manager for FAI Protocol
-pub struct DatabaseManager {
-    /// SQLite database connection
-    conn: Connection,
+/// Represents a branch in the FAI repository
+#[derive(Debug, Clone)]
+pub struct Branch {
+    /// Branch name
+    pub name: String,
+    /// Current commit hash this branch points to
+    pub commit_hash: String,
+    /// When this branch was created
+    pub created_at: DateTime<Utc>,
+    /// When this branch was last updated
+    pub last_updated: DateTime<Utc>,
 }
+
+/// Represents the current HEAD state
+#[derive(Debug, Clone)]
+pub struct HeadState {
+    /// Current branch name
+    pub branch_name: String,
+    /// Current commit hash
+    pub commit_hash: String,
+    /// Whether HEAD is detached (pointing directly to commit rather than branch)
+    pub is_detached: bool,
+}
+
 
 impl DatabaseManager {
     /// Create a new database manager with the specified database path
@@ -53,14 +74,50 @@ impl DatabaseManager {
         // Enable foreign key support
         self.conn.execute("PRAGMA foreign_keys = ON", [])?;
 
-        // Create commits table
+        // Create commits table (updated to support multiple parents for merges)
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS commits (
                 hash TEXT PRIMARY KEY,
                 message TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
-                parent_hash TEXT,
-                FOREIGN KEY (parent_hash) REFERENCES commits(hash)
+                is_merge BOOLEAN NOT NULL DEFAULT FALSE
+            )",
+            [],
+        )?;
+
+        // Create commit_parents table for supporting multiple parents (merge commits)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS commit_parents (
+                commit_hash TEXT NOT NULL,
+                parent_hash TEXT NOT NULL,
+                parent_order INTEGER NOT NULL,
+                PRIMARY KEY (commit_hash, parent_order),
+                FOREIGN KEY (commit_hash) REFERENCES commits(hash) ON DELETE CASCADE,
+                FOREIGN KEY (parent_hash) REFERENCES commits(hash) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Create branches table
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS branches (
+                name TEXT PRIMARY KEY,
+                commit_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_updated INTEGER NOT NULL,
+                FOREIGN KEY (commit_hash) REFERENCES commits(hash) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        // Create HEAD tracking table
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS head (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                branch_name TEXT NOT NULL,
+                commit_hash TEXT NOT NULL,
+                FOREIGN KEY (branch_name) REFERENCES branches(name) ON DELETE CASCADE,
+                FOREIGN KEY (commit_hash) REFERENCES commits(hash) ON DELETE CASCADE
             )",
             [],
         )?;
@@ -135,14 +192,16 @@ impl DatabaseManager {
     /// # Arguments
     /// * `hash` - Commit hash
     /// * `message` - Commit message
-    /// * `parent` - Optional parent commit hash
+    /// * `parents` - List of parent commit hashes (empty for initial, multiple for merge)
     /// * `files` - List of files included in this commit
+    /// * `is_merge` - Whether this is a merge commit
     pub fn create_commit(
         &self,
         hash: &str,
         message: &str,
-        parent: Option<&str>,
+        parents: &[&str],
         files: &[(String, String, u64)],
+        is_merge: bool,
     ) -> Result<()> {
         // Validate inputs
         if hash.is_empty() {
@@ -171,14 +230,14 @@ impl DatabaseManager {
         }
 
         println!(
-            "DEBUG: Creating commit: hash={}, message={}, timestamp={}",
-            hash, message, timestamp
+            "DEBUG: Creating commit: hash={}, message={}, timestamp={}, is_merge={}, parents={:?}",
+            hash, message, timestamp, is_merge, parents
         );
 
         // Insert commit
         match self.conn.execute(
-            "INSERT INTO commits (hash, message, timestamp, parent_hash) VALUES (?1, ?2, ?3, ?4)",
-            params![hash, message, timestamp, parent],
+            "INSERT INTO commits (hash, message, timestamp, is_merge) VALUES (?1, ?2, ?3, ?4)",
+            params![hash, message, timestamp, is_merge],
         ) {
             Ok(rows) => {
                 println!(
@@ -189,6 +248,22 @@ impl DatabaseManager {
             Err(e) => {
                 println!("DEBUG: Failed to insert commit: {}", e);
                 return Err(anyhow::anyhow!("Failed to insert commit: {}", e));
+            }
+        }
+
+        // Insert parent relationships
+        for (index, parent_hash) in parents.iter().enumerate() {
+            match self.conn.execute(
+                "INSERT INTO commit_parents (commit_hash, parent_hash, parent_order) VALUES (?1, ?2, ?3)",
+                params![hash, parent_hash, index as i32],
+            ) {
+                Ok(_) => {
+                    println!("DEBUG: Successfully inserted parent relationship: {} -> {}", hash, parent_hash);
+                }
+                Err(e) => {
+                    println!("DEBUG: Failed to insert parent relationship: {}", e);
+                    return Err(anyhow::anyhow!("Failed to insert parent relationship: {}", e));
+                }
             }
         }
 
@@ -225,15 +300,32 @@ impl DatabaseManager {
     pub fn get_commit(&self, hash: &str) -> Result<Option<Commit>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT hash, message, timestamp, parent_hash FROM commits WHERE hash = ?1")?;
+            .prepare("SELECT hash, message, timestamp, is_merge FROM commits WHERE hash = ?1")?;
 
         let mut rows = stmt.query([hash])?;
         if let Some(row) = rows.next()? {
+            let commit_hash: String = row.get(0)?;
+            let message: String = row.get(1)?;
+            let timestamp: i64 = row.get(2)?;
+            let is_merge: bool = row.get(3)?;
+
+            // Get parent commits
+            let mut parent_stmt = self.conn.prepare(
+                "SELECT parent_hash FROM commit_parents WHERE commit_hash = ?1 ORDER BY parent_order"
+            )?;
+            let parent_rows = parent_stmt.query([&commit_hash])?;
+
+            let mut parents = Vec::new();
+            for parent_row in parent_rows.map(|row| row.unwrap()) {
+                parents.push(parent_row.get(0)?);
+            }
+
             Ok(Some(Commit {
-                hash: row.get(0)?,
-                message: row.get(1)?,
-                timestamp: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
-                parent_hash: row.get(3)?,
+                hash: commit_hash,
+                message,
+                timestamp: DateTime::from_timestamp_millis(timestamp).unwrap_or_default(),
+                is_merge,
+                parents,
             }))
         } else {
             Ok(None)
@@ -312,7 +404,218 @@ impl DatabaseManager {
 
         Ok(commits)
     }
-}
+
+    // Branch Management Methods
+
+    /// Create a new branch pointing to a specific commit
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    /// * `commit_hash` - Commit hash to point to
+    pub fn create_branch(&self, name: &str, commit_hash: &str) -> Result<()> {
+        // Validate inputs
+        if name.is_empty() {
+            return Err(anyhow::anyhow!("Branch name cannot be empty"));
+        }
+        if commit_hash.is_empty() {
+            return Err(anyhow::anyhow!("Commit hash cannot be empty"));
+        }
+
+        // Check if commit exists
+        let commit_exists = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM commits WHERE hash = ?1", [commit_hash], |row| row.get(0))
+            .unwrap_or(0);
+
+        if commit_exists == 0 {
+            return Err(anyhow::anyhow!("Commit {} does not exist", commit_hash));
+        }
+
+        // Create branch
+        let timestamp = Utc::now().timestamp_millis();
+        self.conn.execute(
+            "INSERT OR REPLACE INTO branches (name, commit_hash, created_at, last_updated) VALUES (?1, ?2, ?3, ?3)",
+            params![name, commit_hash, timestamp],
+        )?;
+
+        Ok(())
+    }
+
+    /// Get all branches
+    ///
+    /// # Returns
+    /// Vector of all branches
+    pub fn get_branches(&self) -> Result<Vec<Branch>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name, commit_hash, created_at, last_updated FROM branches ORDER BY name")?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(Branch {
+                name: row.get(0)?,
+                commit_hash: row.get(1)?,
+                created_at: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
+                last_updated: DateTime::from_timestamp_millis(row.get(3)?).unwrap_or_default(),
+            })
+        })?;
+
+        let mut branches = Vec::new();
+        for row in rows {
+            branches.push(row?);
+        }
+
+        Ok(branches)
+    }
+
+    /// Get branch by name
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    ///
+    /// # Returns
+    /// The branch if found, None otherwise
+    pub fn get_branch(&self, name: &str) -> Result<Option<Branch>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name, commit_hash, created_at, last_updated FROM branches WHERE name = ?1")?;
+
+        let mut rows = stmt.query([name])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(Branch {
+                name: row.get(0)?,
+                commit_hash: row.get(1)?,
+                created_at: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
+                last_updated: DateTime::from_timestamp_millis(row.get(3)?).unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update branch to point to a new commit
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    /// * `commit_hash` - New commit hash
+    pub fn update_branch(&self, name: &str, commit_hash: &str) -> Result<()> {
+        // Validate inputs
+        if name.is_empty() {
+            return Err(anyhow::anyhow!("Branch name cannot be empty"));
+        }
+        if commit_hash.is_empty() {
+            return Err(anyhow::anyhow!("Commit hash cannot be empty"));
+        }
+
+        // Check if commit exists
+        let commit_exists = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM commits WHERE hash = ?1", [commit_hash], |row| row.get(0))
+            .unwrap_or(0);
+
+        if commit_exists == 0 {
+            return Err(anyhow::anyhow!("Commit {} does not exist", commit_hash));
+        }
+
+        // Update branch
+        let timestamp = Utc::now().timestamp_millis();
+        self.conn.execute(
+            "UPDATE branches SET commit_hash = ?1, last_updated = ?2 WHERE name = ?3",
+            params![commit_hash, timestamp, name],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete a branch
+    ///
+    /// # Arguments
+    /// * `name` - Branch name to delete
+    pub fn delete_branch(&self, name: &str) -> Result<()> {
+        // Cannot delete current branch
+        if let Some(head) = self.get_head()? {
+            if head.branch_name == name {
+                return Err(anyhow::anyhow!("Cannot delete currently checked out branch"));
+            }
+        }
+
+        self.conn.execute("DELETE FROM branches WHERE name = ?1", [name])?;
+        Ok(())
+    }
+
+    /// Get current HEAD state
+    ///
+    /// # Returns
+    /// Current HEAD state
+    pub fn get_head(&self) -> Result<Option<HeadState>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT branch_name, commit_hash FROM head WHERE id = 1")?;
+
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(HeadState {
+                branch_name: row.get(0)?,
+                commit_hash: row.get(1)?,
+                is_detached: false, // TODO: Implement detached HEAD
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Set current HEAD to a branch
+    ///
+    /// # Arguments
+    /// * `branch_name` - Branch name to check out
+    pub fn set_head(&self, branch_name: &str) -> Result<()> {
+        // Check if branch exists
+        let branch = self.get_branch(branch_name)?;
+        if branch.is_none() {
+            return Err(anyhow::anyhow!("Branch '{}' does not exist", branch_name));
+        }
+
+        let branch = branch.unwrap();
+        let timestamp = Utc::now().timestamp_millis();
+
+        // Update or insert HEAD
+        self.conn.execute(
+            "INSERT OR REPLACE INTO head (id, branch_name, commit_hash) VALUES (1, ?1, ?2)",
+            params![branch_name, branch.commit_hash],
+        )?;
+
+        Ok(())
+    }
+
+    /// Initialize default branch (main) and HEAD if they don't exist
+    pub fn initialize_default_branch(&self) -> Result<()> {
+        // Check if any commits exist
+        let latest_commit: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT hash FROM commits ORDER BY timestamp DESC, hash DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(commit_hash) = latest_commit {
+            let timestamp = Utc::now().timestamp_millis();
+
+            // Create default 'main' branch if it doesn't exist
+            self.conn.execute(
+                "INSERT OR IGNORE INTO branches (name, commit_hash, created_at, last_updated) VALUES ('main', ?1, ?2, ?2)",
+                params![commit_hash, timestamp],
+            )?;
+
+            // Set HEAD to main branch if not set
+            self.conn.execute(
+                "INSERT OR IGNORE INTO head (id, branch_name, commit_hash) VALUES (1, 'main', ?1)",
+                params![commit_hash],
+            )?;
+        }
+
+        Ok(())
+    }
 
 #[cfg(test)]
 mod tests {

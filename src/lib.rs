@@ -22,8 +22,10 @@ pub struct CommitInfo {
     pub message: String,
     /// Commit timestamp
     pub timestamp: DateTime<Utc>,
-    /// Parent commit hash (None for initial commit)
-    pub parent_hash: Option<String>,
+    /// Parent commit hashes (empty for initial commit, multiple for merge commits)
+    pub parents: Vec<String>,
+    /// Whether this is a merge commit
+    pub is_merge: bool,
 }
 
 /// Main library interface for FAI Protocol
@@ -148,11 +150,16 @@ impl FaiProtocol {
         let commit_hash = hasher.finalize().to_hex().to_string();
 
         // Create commit in database
+        let parents = match parent_hash.as_deref() {
+            Some(p) => vec![p],
+            None => vec![],
+        };
         self.database.create_commit(
             &commit_hash,
             message,
-            parent_hash.as_deref(),
+            &parents,
             &staged_files,
+            false, // Not a merge commit
         )?;
 
         // Update HEAD file
@@ -173,7 +180,8 @@ impl FaiProtocol {
                 hash: c.hash,
                 message: c.message,
                 timestamp: c.timestamp,
-                parent_hash: c.parent_hash,
+                parents: c.parents,
+                is_merge: c.is_merge,
             })
             .collect())
     }
