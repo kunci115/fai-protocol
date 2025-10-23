@@ -447,33 +447,34 @@ impl StorageManager {
     pub fn get_all_commits(&self) -> Result<Vec<CommitInfo>> {
         let conn = self.db.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT c.hash, c.message, c.timestamp, 
-                    GROUP_CONCAT(cf.file_hash) as file_hashes
+            "SELECT c.hash, c.message, c.timestamp 
              FROM commits c 
-             LEFT JOIN commit_files cf ON c.hash = cf.commit_hash 
-             GROUP BY c.hash, c.message, c.timestamp
              ORDER BY c.timestamp DESC"
         )?;
         
-        let mut rows = stmt.query_map([], |row| {
-            let file_hashes_str: String = row.get(3)?;
-            let file_hashes: Vec<String> = if file_hashes_str.is_empty() {
-                vec![]
-            } else {
-                file_hashes_str.split(',').map(|s| s.to_string()).collect()
-            };
-            
+        let commit_iter = stmt.query_map([], |row| {
             Ok(CommitInfo {
                 hash: row.get(0)?,
                 message: row.get(1)?,
                 timestamp: row.get(2)?,
-                file_hashes,
+                file_hashes: Vec::new(), // Will be filled separately
             })
         })?;
         
         let mut commits = Vec::new();
-        while let Some(row) = rows.next()? {
-            commits.push(row?);
+        for commit_result in commit_iter {
+            let mut commit = commit_result?;
+            
+            // Get file hashes for this commit
+            let mut file_stmt = conn.prepare(
+                "SELECT file_hash FROM commit_files WHERE commit_hash = ?"
+            )?;
+            let file_hashes: Result<Vec<String>, _> = file_stmt
+                .query_map([&commit.hash], |row| row.get(0))?
+                .collect();
+            commit.file_hashes = file_hashes?;
+            
+            commits.push(commit);
         }
         
         Ok(commits)
