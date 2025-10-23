@@ -36,7 +36,7 @@ sleep 5
 
 # Check if server started
 if grep -q "Local peer ID:" server.log; then
-    PEER_ID=$(grep "Local peer ID:" server.log | awk '{print $4}')
+    PEER_ID=$(grep "Local peer ID:" server.log | head -n1 | awk '{print $4}')
     echo "Server started with peer ID: $PEER_ID"
 
     echo
