@@ -166,8 +166,8 @@ If you encounter network-related issues, ensure your firewall allows:
 
 ## 📚 Next Steps
 
-- Read the [User Guide](USER_GUIDE.md) for detailed usage
 - Check the [API Documentation](https://docs.rs/fai-protocol) for integration
+- Read the [Architecture Guide](docs/architecture.md) for technical details
 - Visit the [GitHub Repository](https://github.com/kunci115/fai-protocol) for issues and contributions
 
 ## 🤝 Contributing

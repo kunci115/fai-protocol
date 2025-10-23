@@ -604,7 +604,7 @@ This project is licensed under the **GNU Affero General Public License v3.0** - 
 
 **🔮 Ready to decentralize your large file workflow?**
 
-[Get Started](#-quick-start-in-60-seconds) • [Use Cases](#-use-cases-by-industry) • [Documentation](docs/) • [Contributing](#-contributing)
+[Get Started](#-quick-start-in-60-seconds) • [Use Cases](#-use-cases-by-industry) • [Architecture](docs/architecture.md) • [Contributing](#-contributing)
 
 **FAI Protocol: Version control for the files Git forgot.** 🚀
 
