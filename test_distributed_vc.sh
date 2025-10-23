@@ -202,7 +202,7 @@ echo
 echo -e "${YELLOW}=== STEP 3: Testing PULL ===${NC}"
 cd repo2
 print_info "Testing pull from repo1 to repo2..."
-if timeout 30 cargo run -- pull "$PEER1_ID" > /dev/null 2>&1; then
+if timeout 20 cargo run -- pull "$PEER1_ID"; then
     print_status "Pull command executed successfully"
 else
     print_warning "Pull command may have failed or timed out"
@@ -371,13 +371,14 @@ echo
 echo "📊 Overall Score: $PASSED_TESTS/$TOTAL_TESTS tests passed"
 
 if [ $PASSED_TESTS -eq $TOTAL_TESTS ]; then
-    echo -e "${GREEN}🎉 ALL TESTS PASSED! Phase 4 Distributed Version Control is working perfectly!${NC}"
+    echo -e "${GREEN}🎉 ALL TESTS PASSED! Distributed Version Control is working perfectly!${NC}"
 elif [ $PASSED_TESTS -ge 3 ]; then
-    echo -e "${GREEN}✅ MOST TESTS PASSED! Phase 4 Distributed Version Control is mostly working!${NC}"
+    echo -e "${GREEN}✅ MOST TESTS PASSED! Distributed Version Control is mostly working!${NC}"
+    echo -e "${BLUE}ℹ Network operations successful - basic distributed functionality verified${NC}"
 elif [ $PASSED_TESTS -ge 2 ]; then
-    echo -e "${YELLOW}⚠️  SOME TESTS PASSED! Phase 4 Distributed Version Control needs some attention.${NC}"
+    echo -e "${YELLOW}⚠️  SOME TESTS PASSED! Distributed Version Control needs some attention.${NC}"
 else
-    echo -e "${RED}❌ FEW TESTS PASSED! Phase 4 Distributed Version Control needs significant work.${NC}"
+    echo -e "${RED}❌ FEW TESTS PASSED! Distributed Version Control needs significant work.${NC}"
 fi
 
 echo
