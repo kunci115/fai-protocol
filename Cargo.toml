@@ -25,6 +25,3 @@ async-trait = "0.1"
 name = "fai"
 path = "src/main.rs"
 
-[[bin]]
-name = "network_test"
-path = "src/bin/network_test.rs"
