@@ -50,15 +50,20 @@ if grep -q "Local peer ID:" server.log; then
     echo "Peer discovery completed"
     
     echo
-    echo "Testing simple fetch operation..."
-    echo "Running: cargo run -- fetch $PEER_ID $REPO1_COMMIT"
+    echo "Testing distributed version control - pulling commits from peer..."
+    echo "Running: cargo run -- pull $PEER_ID"
     echo "Peer ID: $PEER_ID"
-    echo "Commit: $REPO1_COMMIT"
-    cargo run -- fetch "$PEER_ID" "$REPO1_COMMIT" &
-    FETCH_PID=$!
-    sleep 20
-    kill $FETCH_PID 2>/dev/null || true
-    echo "Fetch operation completed"
+    echo "Pulling commits from remote repository..."
+    cargo run -- pull "$PEER_ID" &
+    PULL_PID=$!
+    sleep 15
+    kill $PULL_PID 2>/dev/null || true
+    echo "Pull operation completed"
+    
+    echo
+    echo "Verifying pulled commits..."
+    echo "Current commit log after pull:"
+    cargo run -- log || echo "Log command failed"
 else
     echo "ERROR: Server failed to start"
     cat server.log
