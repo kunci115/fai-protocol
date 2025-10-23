@@ -625,10 +625,11 @@ impl NetworkManager {
         );
         
         println!("DEBUG: Sent commit request to peer {}, request_id={:?}", peer, request_id);
+        println!("DEBUG: Awaiting response from server...");
         
         // Wait for response with timeout
         use futures::StreamExt;
-        let timeout_duration = std::time::Duration::from_secs(20);
+        let timeout_duration = std::time::Duration::from_secs(30);
         let start_time = std::time::Instant::now();
         
         while start_time.elapsed() < timeout_duration {
@@ -649,6 +650,9 @@ impl NetworkManager {
                                     } if response_id == request_id => {
                                         println!("DEBUG: Received matching commit response for request {:?}: {} commits", 
                                             response_id, response.commits.len());
+                                        for (i, commit) in response.commits.iter().enumerate() {
+                                            println!("DEBUG: Commit {}: {} - {}", i, &commit.hash[..8], commit.message);
+                                        }
                                         return Ok(response.commits);
                                     }
                                     libp2p::request_response::Message::Response { 
@@ -657,7 +661,19 @@ impl NetworkManager {
                                     } => {
                                         println!("DEBUG: Received non-matching commit response for request {:?}: {} commits", response_id, response.commits.len());
                                     }
-                                    _ => {}
+                                    libp2p::request_response::Message::Request { 
+                                        request, 
+                                        channel, 
+                                        request_id,
+                                        ..
+                                    } => {
+                                        println!("DEBUG: Received unexpected commit request from peer {} (request_id: {:?})", _response_peer, request_id);
+                                        // This shouldn't happen in client mode, but handle it gracefully
+                                        let response = CommitResponse { commits: vec![] };
+                                        if let Err(e) = self.swarm.behaviour_mut().commit_response.send_response(channel, response) {
+                                            println!("DEBUG: Failed to send response to unexpected request: {:?}", e);
+                                        }
+                                    }
                                 }
                             }
                             SwarmEvent::Behaviour(FAIEvent::CommitResponse(
@@ -667,16 +683,34 @@ impl NetworkManager {
                                     error 
                                 }
                             )) if response_id == request_id => {
-                                println!("Commit request failed (error: {:?})", error);
+                                println!("DEBUG: Commit request failed (error: {:?})", error);
+                                return Ok(vec![]);
+                            }
+                            SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                                libp2p::request_response::Event::InboundFailure { 
+                                    request_id: response_id, 
+                                    peer: _, 
+                                    error 
+                                }
+                            )) if response_id == request_id => {
+                                println!("DEBUG: Commit request inbound failure (error: {:?})", error);
                                 return Ok(vec![]);
                             }
                             SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
                                 for (peer_id, addr) in list {
-                                    println!("Discovered peer {} at {}", peer_id, addr);
+                                    println!("DEBUG: Discovered additional peer {} at {}", peer_id, addr);
                                     let _ = self.swarm.dial(addr);
                                 }
                             }
-                            _ => {}
+                            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                                println!("DEBUG: Connection established to {}", peer_id);
+                            }
+                            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                                println!("DEBUG: Connection closed to {}", peer_id);
+                            }
+                            _ => {
+                                println!("DEBUG: Received other event type, continuing to wait...");
+                            }
                         }
                     } else {
                         println!("DEBUG: Event stream ended unexpectedly");
