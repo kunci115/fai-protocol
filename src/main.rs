@@ -755,7 +755,7 @@ async fn main() -> Result<()> {
             println!("Initializing repository in {}...", target_dir);
             
             // Create the .fai directory structure
-            let fai_path = repo_path;
+            let fai_path = repo_path.clone();
             std::fs::create_dir_all(fai_path.join("objects"))?;
             
             // Create storage manager
