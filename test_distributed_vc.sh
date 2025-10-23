@@ -164,7 +164,6 @@ else
 fi
 cd ..
 
-cd ..
 print_status "Repository setup complete"
 echo
 
