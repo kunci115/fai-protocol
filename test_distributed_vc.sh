@@ -181,7 +181,7 @@ if wait_for_service "../serve1.log" "FAI server"; then
         
         cd ../repo2
         print_info "Testing push from repo2 to repo1..."
-        if timeout 30 cargo run -- push "$PEER1_ID" > /dev/null 2>&1; then
+        if timeout 20 cargo run -- push "$PEER1_ID"; then
             print_status "Push command executed successfully"
         else
             print_warning "Push command may have failed or timed out"
@@ -247,7 +247,7 @@ if wait_for_service "../serve1.log" "FAI server"; then
         
         cd ..
         print_info "Cloning repo1 to repo3..."
-        if timeout 35 cargo run -- clone "$PEER1_ID" repo3 > /dev/null 2>&1; then
+        if timeout 25 cargo run -- clone "$PEER1_ID" repo3; then
             print_status "Clone command executed successfully"
         else
             print_warning "Clone command may have failed or timed out"
