@@ -446,6 +446,12 @@ impl StorageManager {
     /// Vector of CommitInfo for all commits
     pub fn get_all_commits(&self) -> Result<Vec<CommitInfo>> {
         let conn = self.db.lock().unwrap();
+        
+        // Debug: Check what's in the database
+        println!("DEBUG: get_all_commits called, checking database contents");
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM commits", [], |row| row.get(0))?;
+        println!("DEBUG: Found {} commits in database", count);
+        
         let mut stmt = conn.prepare(
             "SELECT c.hash, c.message, c.timestamp 
              FROM commits c 
@@ -489,37 +495,33 @@ impl StorageManager {
     /// The CommitInfo if found, None otherwise
     pub fn get_commit(&self, hash: &str) -> Result<Option<CommitInfo>> {
         let conn = self.db.lock().unwrap();
+        
+        // First get basic commit info
         let mut stmt = conn.prepare(
-            "SELECT c.hash, c.message, c.timestamp, cf.file_hash 
-             FROM commits c 
-             LEFT JOIN commit_files cf ON c.hash = cf.commit_hash 
-             WHERE c.hash = ?1"
+            "SELECT hash, message, timestamp FROM commits WHERE hash = ?1"
         )?;
         
         let mut rows = stmt.query([hash])?;
-        let mut file_hashes = Vec::new();
-        let mut commit_data = None;
-        
-        while let Some(row) = rows.next()? {
-            if commit_data.is_none() {
-                commit_data = Some((
-                    row.get(0)?,  // hash
-                    row.get(1)?,  // message  
-                    row.get(2)?   // timestamp
-                ));
-            }
+        if let Some(row) = rows.next()? {
+            let hash: String = row.get(0)?;
+            let message: String = row.get(1)?;
+            let timestamp: i64 = row.get(2)?;
             
-            if let Some(file_hash) = row.get::<_, Option<String>>(3)? {
-                file_hashes.push(file_hash);
-            }
-        }
-        
-        if let Some((hash, message, timestamp)) = commit_data {
+            // Now get file hashes for this commit
+            let mut file_stmt = conn.prepare(
+                "SELECT file_hash FROM commit_files WHERE commit_hash = ?1"
+            )?;
+            
+            let file_rows = file_stmt.query([hash])?;
+            let file_hashes: Result<Vec<String>, _> = file_rows
+                .map(|row| row.get(0))
+                .collect();
+            
             Ok(Some(CommitInfo {
                 hash,
                 message,
                 timestamp,
-                file_hashes,
+                file_hashes: file_hashes?,
             }))
         } else {
             Ok(None)
