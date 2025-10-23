@@ -45,6 +45,9 @@ impl DatabaseManager {
     /// 
     /// Creates the necessary tables if they don't exist
     fn init_schema(&self) -> Result<()> {
+        // Enable foreign key support
+        self.conn.execute("PRAGMA foreign_keys = ON", [])?;
+        
         // Create commits table
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS commits (
@@ -142,19 +145,60 @@ impl DatabaseManager {
         parent: Option<&str>,
         files: &[(String, String, u64)],
     ) -> Result<()> {
+        // Validate inputs
+        if hash.is_empty() {
+            return Err(anyhow::anyhow!("Commit hash cannot be empty"));
+        }
+        if message.trim().is_empty() {
+            return Err(anyhow::anyhow!("Commit message cannot be empty"));
+        }
+        
         // Insert commit with current timestamp in milliseconds for uniqueness
         let timestamp = Utc::now().timestamp_millis();
-        self.conn.execute(
+        
+        // Check if commit already exists
+        let existing_count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM commits WHERE hash = ?1",
+            [hash],
+            |row| row.get(0)
+        ).unwrap_or(0);
+        
+        if existing_count > 0 {
+            println!("DEBUG: Commit {} already exists, skipping insertion", hash);
+            return Ok(());
+        }
+        
+        println!("DEBUG: Creating commit: hash={}, message={}, timestamp={}", hash, message, timestamp);
+        
+        // Insert commit
+        match self.conn.execute(
             "INSERT INTO commits (hash, message, timestamp, parent_hash) VALUES (?1, ?2, ?3, ?4)",
             params![hash, message, timestamp, parent],
-        )?;
+        ) {
+            Ok(rows) => {
+                println!("DEBUG: Successfully inserted commit, rows affected: {}", rows);
+            }
+            Err(e) => {
+                println!("DEBUG: Failed to insert commit: {}", e);
+                return Err(anyhow::anyhow!("Failed to insert commit: {}", e));
+            }
+        }
 
         // Insert commit files
         for (file_path, file_hash, file_size) in files {
-            self.conn.execute(
+            println!("DEBUG: Inserting commit file: path={}, hash={}, size={}", file_path, file_hash, file_size);
+            match self.conn.execute(
                 "INSERT INTO commit_files (commit_hash, file_path, file_hash, file_size) VALUES (?1, ?2, ?3, ?4)",
                 params![hash, file_path, file_hash, file_size],
-            )?;
+            ) {
+                Ok(rows) => {
+                    println!("DEBUG: Successfully inserted commit file, rows affected: {}", rows);
+                }
+                Err(e) => {
+                    println!("DEBUG: Failed to insert commit file: {}", e);
+                    // Continue with other files even if one fails
+                }
+            }
         }
 
         Ok(())
