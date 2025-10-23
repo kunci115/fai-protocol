@@ -566,6 +566,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 **FAI Protocol: Version control for the files Git forgot.** 🚀
 
-Made with ❤️ by the FAI Protocol community
+Made with ❤️ by the FAI Protocol community - Rino(Kunci115)
 
 </div>
