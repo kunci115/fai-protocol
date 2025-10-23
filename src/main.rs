@@ -56,6 +56,13 @@ enum Commands {
         /// Optional specific commit hash to pull (pulls all if not specified)
         commit_hash: Option<String>,
     },
+    /// Clone an entire repository from a peer
+    Clone {
+        /// Peer ID to clone from
+        peer_id: String,
+        /// Optional target directory (defaults to current directory)
+        directory: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -721,6 +728,135 @@ async fn main() -> Result<()> {
             }
             
             println!("✓ Pull complete! Pulled {} commits", commits.len());
+        }
+        Commands::Clone { peer_id, directory } => {
+            println!("Cloning repository from peer {}...", peer_id);
+            
+            // Parse peer ID
+            let target_peer = PeerId::from_str(&peer_id)
+                .map_err(|_| anyhow::anyhow!("Invalid peer ID format: {}", peer_id))?;
+            
+            // Determine target directory
+            let target_dir = directory.unwrap_or_else(|| ".".to_string());
+            let repo_path = std::path::Path::new(&target_dir).join(".fai");
+            
+            // Check if repo already exists
+            if repo_path.exists() {
+                return Err(anyhow::anyhow!("Repository already exists at {}", repo_path.display()));
+            }
+            
+            // Create target directory if it doesn't exist
+            if target_dir != "." {
+                std::fs::create_dir_all(&target_dir)?;
+                println!("Created target directory: {}", target_dir);
+            }
+            
+            // Initialize new repository in target directory
+            println!("Initializing repository in {}...", target_dir);
+            
+            // Create the .fai directory structure
+            let fai_path = repo_path;
+            std::fs::create_dir_all(fai_path.join("objects"))?;
+            
+            // Create storage manager
+            let storage = Arc::new(fai_protocol::storage::StorageManager::new(
+                fai_path.to_path_buf()
+            )?);
+            
+            // Initialize network
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
+                Ok(nm) => nm,
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                }
+            };
+            
+            network_manager.start()?;
+            
+            println!("Local peer ID: {}", network_manager.local_peer_id());
+            
+            // Discover peer
+            println!("Discovering peer...");
+            let discovery_start = std::time::Instant::now();
+            let discovery_duration = std::time::Duration::from_secs(10);
+            
+            while discovery_start.elapsed() < discovery_duration {
+                if let Err(e) = network_manager.poll_events().await {
+                    eprintln!("Error during peer discovery: {}", e);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            
+            // Check if target peer was discovered
+            let peers = network_manager.list_peers();
+            let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
+            
+            if !target_peer_found {
+                println!("Discovered {} peers, but target peer {} not found", peers.len(), peer_id);
+                for peer in &peers {
+                    println!("  - {}", peer.peer_id);
+                }
+                return Err(anyhow::anyhow!("Peer {} not discovered in local network", peer_id));
+            }
+            
+            println!("Found peer {}", peer_id);
+            
+            // Request ALL commits from peer
+            println!("Fetching commit history...");
+            let commits = network_manager.request_commits(target_peer.clone(), None).await?;
+            
+            if commits.is_empty() {
+                println!("⚠️  Peer has no commits");
+                return Ok(());
+            }
+            
+            println!("Found {} commits to clone", commits.len());
+            
+            // Collect all unique file hashes across all commits
+            let mut all_file_hashes: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for commit in &commits {
+                for file_hash in &commit.file_hashes {
+                    all_file_hashes.insert(file_hash.clone());
+                }
+            }
+            
+            println!("Downloading {} unique files...", all_file_hashes.len());
+            
+            // Download all files
+            let mut downloaded = 0;
+            for file_hash in &all_file_hashes {
+                print!("  Downloading file {}/{} ({})... ", 
+                       downloaded + 1, all_file_hashes.len(), &file_hash[..8]);
+                
+                match network_manager.request_chunk(target_peer.clone(), file_hash).await {
+                    Ok(Some(data)) => {
+                        storage.store(&data)?;
+                        println!("✓ {} bytes", data.len());
+                        downloaded += 1;
+                    }
+                    Ok(None) => {
+                        println!("✗ Not available");
+                    }
+                    Err(e) => {
+                        println!("✗ Failed: {}", e);
+                    }
+                }
+            }
+            
+            println!("✓ Downloaded {}/{} files", downloaded, all_file_hashes.len());
+            
+            // Save all commits to local database
+            println!("Importing commit history...");
+            for (i, commit) in commits.iter().enumerate() {
+                storage.save_remote_commit(commit)?;
+                println!("  Imported commit {}/{}: {} - {}", 
+                         i + 1, commits.len(), &commit.hash[..8], commit.message);
+            }
+            
+            println!("\n✓ Clone complete!");
+            println!("  Repository: {}", repo_path.display());
+            println!("  Commits: {}", commits.len());
+            println!("  Files: {}", downloaded);
         }
         Commands::Serve => {
             // Check if repository is initialized
