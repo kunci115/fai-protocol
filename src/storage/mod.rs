@@ -512,7 +512,7 @@ impl StorageManager {
                 "SELECT file_hash FROM commit_files WHERE commit_hash = ?1"
             )?;
             
-            let mut file_rows = file_stmt.query([hash])?;
+            let mut file_rows = file_stmt.query([&hash])?;
             let mut file_hashes = Vec::new();
             while let Some(row) = file_rows.next()? {
                 file_hashes.push(row.get(0)?);
