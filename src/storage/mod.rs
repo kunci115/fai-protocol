@@ -511,7 +511,7 @@ impl StorageManager {
         // Insert commit (ignore if exists)
         tx.execute(
             "INSERT OR IGNORE INTO commits (hash, message, timestamp) VALUES (?1, ?2, ?3)",
-            [&commit.hash, &commit.message, &commit.timestamp],
+            [&commit.hash, &commit.message, &commit.timestamp.to_string()],
         )?;
         
         // Insert file associations
