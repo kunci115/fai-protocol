@@ -350,14 +350,14 @@ async fn main() -> Result<()> {
                 
                 // Iterate over chunks instead of using as_array()
                 for (i, chunk_value) in chunks_array.iter().enumerate() {
-                    let total_chunks = chunks.len();
+                    let total_chunks = chunks_array.len();
                     println!("Downloading {} chunks in parallel...", total_chunks);
                     
                     // Pre-allocate vector for chunk data in correct order
                     let mut chunks_data: Vec<Option<Vec<u8>>> = vec![None; total_chunks];
                     
                     // Download chunks sequentially for now (parallel version would require more complex async handling)
-                    for (i, chunk_value) in chunks.iter().enumerate() {
+                    for (i, chunk_value) in chunks_array.iter().enumerate() {
                         if let Some(chunk_hash) = chunk_value.as_str() {
                             println!("Downloading chunk {}/{} ({})...", i + 1, total_chunks, &chunk_hash[..8]);
                             match network_manager.request_chunk(target_peer.clone(), chunk_hash).await {
@@ -402,9 +402,7 @@ async fn main() -> Result<()> {
                     
                     println!("✓ Assembled complete file ({} bytes)", complete_data_len);
                     println!("Saved to: {}", filename);
-                } else {
-                    return Err(anyhow::anyhow!("Invalid manifest format: no chunks found"));
-                }
+
             } else {
                 // Single chunk file
                 println!("Requesting chunk {}...", &hash[..8]);
