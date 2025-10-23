@@ -220,7 +220,7 @@ async fn main() -> Result<()> {
             };
             
             // Start the network manager
-            if let Err(e) = network_manager.start() {
+            if let Err(e) = network_manager.start().await {
                 return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
             }
             
@@ -296,7 +296,7 @@ async fn main() -> Result<()> {
             };
             
             // Start the network manager
-            if let Err(e) = network_manager.start() {
+            if let Err(e) = network_manager.start().await {
                 return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
             }
             
@@ -543,24 +543,30 @@ async fn main() -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("Invalid peer ID format: {}", peer_id))?;
             
             println!("Discovering peers...");
-            
+            println!("DEBUG: About to create storage manager");
+
             // Create storage manager
             let storage = Arc::new(fai_protocol::storage::StorageManager::new(
                 Path::new(".fai").to_path_buf()
             )?);
-            
+            println!("DEBUG: Storage manager created");
+
             // Create network manager
+            println!("DEBUG: About to create network manager");
             let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
                 Ok(nm) => nm,
                 Err(e) => {
                     return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
                 }
             };
-            
+            println!("DEBUG: Network manager created");
+
             // Start the network manager
-            if let Err(e) = network_manager.start() {
+            println!("DEBUG: About to start network manager");
+            if let Err(e) = network_manager.start().await {
                 return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
             }
+            println!("DEBUG: Network manager started");
             
             println!("Local peer ID: {}", network_manager.local_peer_id());
             
@@ -570,12 +576,13 @@ async fn main() -> Result<()> {
             
             println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
             
-            while discovery_start.elapsed() < discovery_duration {
-                if let Err(e) = network_manager.poll_events().await {
-                    eprintln!("Error during peer discovery: {}", e);
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
+// Simplified discovery loop
+            // while discovery_start.elapsed() < discovery_duration {
+            //     if let Err(e) = network_manager.poll_events().await {
+            //         eprintln!("Error during peer discovery: {}", e);
+            //     }
+            //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            // }
             
             // Check if target peer was discovered
             let peers = network_manager.list_peers();
@@ -590,15 +597,27 @@ async fn main() -> Result<()> {
             }
             
             println!("Found peer {}", peer_id);
-            
+
+            // Check if target peer was discovered
+            let peers = network_manager.list_peers();
+            let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
+
+            if !target_peer_found {
+                println!("Discovered {} peers, but target peer {} not found", peers.len(), peer_id);
+                for peer in &peers {
+                    println!("  - {}", peer.peer_id);
+                }
+                return Err(anyhow::anyhow!("Peer {} not discovered in local network", peer_id));
+            }
+
             // Get all commits to push
             let commits = storage.get_all_commits()?;
-            
+
             if commits.is_empty() {
                 println!("No commits to push");
                 return Ok(());
             }
-            
+
             println!("Found {} commits to push", commits.len());
             
             // Create commit info for network transfer (convert timestamp from i64 to proper format)
@@ -613,22 +632,18 @@ async fn main() -> Result<()> {
             
             // Push commits to peer
             println!("Pushing commits to peer {}...", peer_id);
-            
-            // Note: This is a simplified implementation
-            // In a full implementation, you would:
-            // 1. Send commit requests to the peer
-            // 2. Handle the response and potentially send individual commits
-            // 3. Verify the commits were received
-            
-            for (i, commit) in commit_infos.iter().enumerate() {
-                println!("Sending commit {}/{}: {} ({})", 
-                    i + 1, 
-                    commit_infos.len(), 
-                    &commit.hash[..8], 
-                    commit.message.lines().next().unwrap_or(""));
+            println!("DEBUG: About to call network_manager.send_commits");
+
+            // Actually send commits to the peer
+            match network_manager.send_commits(target_peer.clone(), commit_infos.clone()).await {
+                Ok(_) => {
+                    println!("✓ Successfully pushed {} commits to peer {}", commit_infos.len(), peer_id);
+                }
+                Err(e) => {
+                    eprintln!("Failed to push commits: {}", e);
+                    return Err(anyhow::anyhow!("Push failed: {}", e));
+                }
             }
-            
-            println!("✓ Pushed {} commits to peer {}", commit_infos.len(), peer_id);
         }
         Commands::Pull { peer_id, commit_hash } => {
             // Check if repository is initialized
@@ -656,7 +671,7 @@ async fn main() -> Result<()> {
             };
             
             // Start the network manager
-            if let Err(e) = network_manager.start() {
+            if let Err(e) = network_manager.start().await {
                 return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
             }
             
@@ -668,12 +683,13 @@ async fn main() -> Result<()> {
             
             println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
             
-            while discovery_start.elapsed() < discovery_duration {
-                if let Err(e) = network_manager.poll_events().await {
-                    eprintln!("Error during peer discovery: {}", e);
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
+// Simplified discovery loop
+            // while discovery_start.elapsed() < discovery_duration {
+            //     if let Err(e) = network_manager.poll_events().await {
+            //         eprintln!("Error during peer discovery: {}", e);
+            //     }
+            //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            // }
             
             // Check if target peer was discovered
             let peers = network_manager.list_peers();
@@ -691,7 +707,9 @@ async fn main() -> Result<()> {
             
             // Request commits from peer
             println!("Requesting commits from peer {}...", peer_id);
+            println!("DEBUG: About to call network_manager.request_commits");
             let commits = network_manager.request_commits(target_peer.clone(), commit_hash.clone()).await?;
+            println!("DEBUG: request_commits returned");
             
             if commits.is_empty() {
                 println!("No new commits to pull");
@@ -778,7 +796,7 @@ async fn main() -> Result<()> {
                 }
             };
             
-            network_manager.start()?;
+            network_manager.start().await?;
             
             println!("Local peer ID: {}", network_manager.local_peer_id());
             
@@ -787,12 +805,13 @@ async fn main() -> Result<()> {
             let discovery_start = std::time::Instant::now();
             let discovery_duration = std::time::Duration::from_secs(10);
             
-            while discovery_start.elapsed() < discovery_duration {
-                if let Err(e) = network_manager.poll_events().await {
-                    eprintln!("Error during peer discovery: {}", e);
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
+// Simplified discovery loop
+            // while discovery_start.elapsed() < discovery_duration {
+            //     if let Err(e) = network_manager.poll_events().await {
+            //         eprintln!("Error during peer discovery: {}", e);
+            //     }
+            //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            // }
             
             // Check if target peer was discovered
             let peers = network_manager.list_peers();
@@ -999,7 +1018,7 @@ async fn main() -> Result<()> {
             };
             
             // Start the network manager
-            if let Err(e) = network_manager.start() {
+            if let Err(e) = network_manager.start().await {
                 return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
             }
             
