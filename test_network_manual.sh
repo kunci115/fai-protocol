@@ -52,6 +52,8 @@ if grep -q "Local peer ID:" server.log; then
     echo
     echo "Testing simple fetch operation..."
     echo "Running: cargo run -- fetch $PEER_ID $REPO1_COMMIT"
+    echo "Peer ID: $PEER_ID"
+    echo "Commit: $REPO1_COMMIT"
     cargo run -- fetch "$PEER_ID" "$REPO1_COMMIT" &
     FETCH_PID=$!
     sleep 10
