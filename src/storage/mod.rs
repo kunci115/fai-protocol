@@ -503,7 +503,7 @@ impl StorageManager {
     /// # Returns
     /// Ok(()) if successful
     pub fn save_remote_commit(&self, commit: &CommitInfo) -> Result<()> {
-        let conn = self.db.lock().unwrap();
+        let mut conn = self.db.lock().unwrap();
         
         // Start transaction
         let tx = conn.transaction()?;
