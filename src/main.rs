@@ -796,7 +796,6 @@ async fn main() -> Result<()> {
             
             // Discover peer
             println!("Discovering peer...");
-            let discovery_duration = std::time::Duration::from_secs(10);
             
 // Simplified discovery loop
             // while discovery_start.elapsed() < discovery_duration {
