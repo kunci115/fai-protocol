@@ -447,36 +447,33 @@ impl StorageManager {
     pub fn get_all_commits(&self) -> Result<Vec<CommitInfo>> {
         let conn = self.db.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT c.hash, c.message, c.timestamp, cf.file_hash 
+            "SELECT DISTINCT c.hash, c.message, c.timestamp, 
+                    GROUP_CONCAT(cf.file_hash) as file_hashes
              FROM commits c 
              LEFT JOIN commit_files cf ON c.hash = cf.commit_hash 
+             GROUP BY c.hash, c.message, c.timestamp
              ORDER BY c.timestamp DESC"
         )?;
         
-        let mut rows = stmt.query([])?;
-        let mut commits_map: std::collections::HashMap<String, (String, i64, Vec<String>)> = std::collections::HashMap::new();
-        
-        while let Some(row) = rows.next()? {
-            let hash: String = row.get(0)?;
-            let message: String = row.get(1)?;
-            let timestamp: i64 = row.get(2)?;
+        let mut rows = stmt.query_map([], |row| {
+            let file_hashes_str: String = row.get(3)?;
+            let file_hashes: Vec<String> = if file_hashes_str.is_empty() {
+                vec![]
+            } else {
+                file_hashes_str.split(',').map(|s| s.to_string()).collect()
+            };
             
-            let file_hash: Option<String> = row.get(3)?;
-            
-            let entry = commits_map.entry(hash.clone()).or_insert((message, timestamp, Vec::new()));
-            if let Some(fh) = file_hash {
-                entry.2.push(fh);
-            }
-        }
+            Ok(CommitInfo {
+                hash: row.get(0)?,
+                message: row.get(1)?,
+                timestamp: row.get(2)?,
+                file_hashes,
+            })
+        })?;
         
         let mut commits = Vec::new();
-        for (hash, (message, timestamp, file_hashes)) in commits_map {
-            commits.push(CommitInfo {
-                hash,
-                message,
-                timestamp,
-                file_hashes,
-            });
+        while let Some(row) = rows.next()? {
+            commits.push(row?);
         }
         
         Ok(commits)
