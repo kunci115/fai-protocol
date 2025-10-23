@@ -322,11 +322,8 @@ async fn main() -> Result<()> {
                     }
                 }
                 
-                // Check if we should exit
-                if discovery_start.elapsed() >= discovery_duration {
-                    println!("DEBUG: Discovery duration elapsed, breaking");
-                    break;
-                }
+                // Check if we should exit - just use the timeout from tokio::select
+                // This condition is no longer needed since we're using tokio::select!
             }
             
             println!("DEBUG: Discovery time elapsed ({} seconds), checking results...", discovery_duration.as_secs());
