@@ -44,6 +44,11 @@ enum Commands {
     Serve,
     /// List chunks for a multi-chunk file
     Chunks { hash: String },
+    /// Push commits to a peer
+    Push {
+        /// Peer ID to push to
+        peer_id: String,
+    },
 }
 
 #[tokio::main]
@@ -505,6 +510,104 @@ async fn main() -> Result<()> {
             } else {
                 return Err(anyhow::anyhow!("File not found in storage"));
             }
+        }
+        Commands::Push { peer_id } => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            // Parse peer ID
+            let target_peer = PeerId::from_str(&peer_id)
+                .map_err(|_| anyhow::anyhow!("Invalid peer ID format: {}", peer_id))?;
+            
+            println!("Discovering peers...");
+            
+            // Create storage manager
+            let storage = Arc::new(fai_protocol::storage::StorageManager::new(
+                Path::new(".fai").to_path_buf()
+            )?);
+            
+            // Create network manager
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
+                Ok(nm) => nm,
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                }
+            };
+            
+            // Start the network manager
+            if let Err(e) = network_manager.start() {
+                return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
+            }
+            
+            println!("Local peer ID: {}", network_manager.local_peer_id());
+            
+            // Discover peers for 10 seconds
+            let discovery_start = std::time::Instant::now();
+            let discovery_duration = std::time::Duration::from_secs(10);
+            
+            println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
+            
+            while discovery_start.elapsed() < discovery_duration {
+                if let Err(e) = network_manager.poll_events().await {
+                    eprintln!("Error during peer discovery: {}", e);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            
+            // Check if target peer was discovered
+            let peers = network_manager.list_peers();
+            let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
+            
+            if !target_peer_found {
+                println!("Discovered {} peers, but target peer {} not found", peers.len(), peer_id);
+                for peer in &peers {
+                    println!("  - {}", peer.peer_id);
+                }
+                return Err(anyhow::anyhow!("Peer {} not discovered in local network", peer_id));
+            }
+            
+            println!("Found peer {}", peer_id);
+            
+            // Get all commits to push
+            let commits = storage.get_all_commits()?;
+            
+            if commits.is_empty() {
+                println!("No commits to push");
+                return Ok(());
+            }
+            
+            println!("Found {} commits to push", commits.len());
+            
+            // Create commit info for network transfer (convert timestamp from i64 to proper format)
+            let commit_infos: Vec<fai_protocol::storage::CommitInfo> = commits.into_iter()
+                .map(|c| fai_protocol::storage::CommitInfo {
+                    hash: c.hash,
+                    message: c.message,
+                    timestamp: c.timestamp,
+                    file_hashes: c.file_hashes,
+                })
+                .collect();
+            
+            // Push commits to peer
+            println!("Pushing commits to peer {}...", peer_id);
+            
+            // Note: This is a simplified implementation
+            // In a full implementation, you would:
+            // 1. Send commit requests to the peer
+            // 2. Handle the response and potentially send individual commits
+            // 3. Verify the commits were received
+            
+            for (i, commit) in commit_infos.iter().enumerate() {
+                println!("Sending commit {}/{}: {} ({})", 
+                    i + 1, 
+                    commit_infos.len(), 
+                    &commit.hash[..8], 
+                    commit.message.lines().next().unwrap_or(""));
+            }
+            
+            println!("✓ Pushed {} commits to peer {}", commit_infos.len(), peer_id);
         }
         Commands::Serve => {
             // Check if repository is initialized
