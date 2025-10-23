@@ -4,9 +4,9 @@
 
 **Distributed Version Control for Large Files**
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/fai-protocol/fai-protocol)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/fai-protocol/fai-protocol)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/kunci115/fai-protocol)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/kunci115/fai-protocol)
+[![License](https://img.shields.io/badge/license-AGPL%203.0-red.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 
 *Git for large files, done right - True P2P version control for anything from 100MB to TB*
@@ -38,7 +38,8 @@
 ✅ **Smart chunking** - 1MB chunks with deduplication  
 ✅ **Offline-first** - Works on LAN without internet  
 ✅ **Git-like workflow** - Familiar commands  
-✅ **Free forever** - Open source, no subscriptions  
+✅ **Free for research** - AGPL-3.0 for academic and research use
+⚠️ **Commercial license** - Paid license required for commercial use  
 
 ---
 
@@ -88,7 +89,7 @@ fai serve
 ### From Source (Recommended)
 ```bash
 # Clone the repository
-git clone https://github.com/fai-protocol/fai-protocol.git
+git clone https://github.com/kunci115/fai-protocol.git
 cd fai-protocol
 
 # Build and install
@@ -279,7 +280,7 @@ fai fetch 12D3KooWM9ek9txt9kzjoDwU48CKPvSZQBFPNM1UWNXmp9WCgRpp abc12345
 | **Offline-first** | ✅ | ❌ | ❌ | ⚠️ | ✅ |
 | **No server costs** | ✅ | ❌ | ❌ | ❌ | ✅ |
 | **Deduplication** | ❌ | ❌ | ⚠️ | ⚠️ | ✅ |
-| **Cost** | Free | $60+/yr | $120+/yr | $500+/yr | **Free** |
+| **Cost** | Research Free | $60+/yr | $120+/yr | $500+/yr | **AGPL-3.0** |
 
 ### Real-World Examples
 
@@ -384,7 +385,7 @@ Benefits:
 ### Building from Source
 ```bash
 # Clone the repository
-git clone https://github.com/fai-protocol/fai-protocol.git
+git clone https://github.com/kunci115/fai-protocol.git
 cd fai-protocol
 
 # Install dependencies
@@ -523,14 +524,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0** - see the [LICENSE](LICENSE) file for details.
 
-### What this means:
-- ✅ **Commercial use** - Use in proprietary software
-- ✅ **Modification** - Create derivative works  
-- ✅ **Distribution** - Share with others
-- ✅ **Private use** - Use without disclosing source
-- ⚠️ **Liability** - No warranty, use at your own risk
+### 🎓 Research & Academic Use
+- ✅ **Free to use** - For research, academic, and personal projects
+- ✅ **Modify and share** - Create derivative works and share with others
+- ✅ **Full source access** - Complete transparency and auditability
+- ✅ **Community-driven** - Contribute back to open source
+
+### 🏢 Commercial Use
+- ⚠️ **Commercial license required** - For revenue-generating applications
+- 💰 **Contact author** - Purchase commercial license from kunci115
+- 📄 **Dual licensing** - Choose AGPL-3.0 or commercial license
+- 🔒 **No AGPL requirements** - Commercial license removes copyleft restrictions
+
+### Why This License Model?
+- **Research Freedom** - Enables academic collaboration and innovation
+- **Sustainable Development** - Commercial licensing funds continued development
+- **Fair Compensation** - Ensures author can maintain and improve the software
+- **Enterprise Ready** - Commercial terms for business requirements
 
 ---
 

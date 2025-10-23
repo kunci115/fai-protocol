@@ -11,7 +11,7 @@ cargo install fai-protocol
 ### Option 2: Install from Source
 
 ```bash
-git clone https://github.com/fai-protocol/fai-protocol.git
+git clone https://github.com/kunci115/fai-protocol.git
 cd fai-protocol
 cargo install --path .
 ```
@@ -19,7 +19,7 @@ cargo install --path .
 ### Option 3: Development Installation
 
 ```bash
-git clone https://github.com/fai-protocol/fai-protocol.git
+git clone https://github.com/kunci115/fai-protocol.git
 cd fai-protocol
 cargo build --release
 ```
@@ -168,7 +168,7 @@ If you encounter network-related issues, ensure your firewall allows:
 
 - Read the [User Guide](USER_GUIDE.md) for detailed usage
 - Check the [API Documentation](https://docs.rs/fai-protocol) for integration
-- Visit the [GitHub Repository](https://github.com/fai-protocol/fai-protocol) for issues and contributions
+- Visit the [GitHub Repository](https://github.com/kunci115/fai-protocol) for issues and contributions
 
 ## 🤝 Contributing
 
@@ -176,4 +176,14 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## 📄 License
 
-FAI Protocol is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+FAI Protocol is licensed under the **GNU Affero General Public License v3.0**. See [LICENSE](LICENSE) for details.
+
+### 🎓 Research & Academic Use
+- ✅ **Free to use** for research, academic, and personal projects
+- ✅ **Modify and share** with the open source community
+
+### 🏢 Commercial Use
+- ⚠️ **Commercial license required** for revenue-generating applications
+- 💰 **Contact kunci115** to purchase a commercial license
+
+This dual-licensing model enables free academic use while supporting sustainable development through commercial licensing.
