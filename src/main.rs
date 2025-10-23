@@ -63,6 +63,13 @@ enum Commands {
         /// Optional target directory (defaults to current directory)
         directory: Option<String>,
     },
+    /// Compare two commits or versions
+    Diff {
+        /// First commit hash
+        hash1: String,
+        /// Second commit hash
+        hash2: String,
+    },
 }
 
 #[tokio::main]
@@ -857,6 +864,118 @@ async fn main() -> Result<()> {
             println!("  Repository: {}", repo_path.display());
             println!("  Commits: {}", commits.len());
             println!("  Files: {}", downloaded);
+        }
+        Commands::Diff { hash1, hash2 } => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            println!("Comparing versions...");
+            println!("  Version 1: {}", &hash1[..8]);
+            println!("  Version 2: {}", &hash2[..8]);
+            println!();
+            
+            // Create storage manager
+            let storage = fai_protocol::storage::StorageManager::new(
+                Path::new(".fai").to_path_buf()
+            )?;
+            
+            // Get both commits
+            let commit1 = storage.get_commit(&hash1)?
+                .ok_or_else(|| anyhow::anyhow!("Commit not found: {}", hash1))?;
+            let commit2 = storage.get_commit(&hash2)?
+                .ok_or_else(|| anyhow::anyhow!("Commit not found: {}", hash2))?;
+            
+            println!("Commit 1: {}", commit1.message);
+            println!("  Date: {}", chrono::DateTime::from_timestamp(commit1.timestamp, 0)
+                .unwrap_or_default().format("%Y-%m-%d %H:%M:%S"));
+            println!("  Files: {}", commit1.file_hashes.len());
+            
+            println!();
+            
+            println!("Commit 2: {}", commit2.message);
+            println!("  Date: {}", chrono::DateTime::from_timestamp(commit2.timestamp, 0)
+                .unwrap_or_default().format("%Y-%m-%d %H:%M:%S"));
+            println!("  Files: {}", commit2.file_hashes.len());
+            
+            println!();
+            println!("=== Changes ===");
+            
+            // Convert to HashSets for comparison
+            let files1: std::collections::HashSet<_> = commit1.file_hashes.iter().collect();
+            let files2: std::collections::HashSet<_> = commit2.file_hashes.iter().collect();
+            
+            // Files only in commit1 (removed in commit2)
+            let removed: Vec<_> = files1.difference(&files2).collect();
+            
+            // Files only in commit2 (added in commit2)
+            let added: Vec<_> = files2.difference(&files1).collect();
+            
+            // Files in both (unchanged)
+            let unchanged: Vec<_> = files1.intersection(&files2).collect();
+            
+            if !removed.is_empty() {
+                println!("\n❌ Removed files ({}):", removed.len());
+                for file_hash in removed {
+                    // Try to get file size
+                    if let Ok(data) = storage.retrieve(file_hash) {
+                        println!("  - {} ({} bytes)", &file_hash[..8], data.len());
+                    } else {
+                        println!("  - {}", &file_hash[..8]);
+                    }
+                }
+            }
+            
+            if !added.is_empty() {
+                println!("\n✅ Added files ({}):", added.len());
+                for file_hash in added {
+                    // Try to get file size
+                    if let Ok(data) = storage.retrieve(file_hash) {
+                        println!("  + {} ({} bytes)", &file_hash[..8], data.len());
+                    } else {
+                        println!("  + {}", &file_hash[..8]);
+                    }
+                }
+            }
+            
+            if !unchanged.is_empty() {
+                println!("\n⚪ Unchanged files ({}):", unchanged.len());
+                for file_hash in unchanged.iter().take(5) {
+                    println!("  = {}", &file_hash[..8]);
+                }
+                if unchanged.len() > 5 {
+                    println!("  ... and {} more", unchanged.len() - 5);
+                }
+            }
+            
+            // Summary
+            println!();
+            println!("=== Summary ===");
+            println!("  Added:     {} files", added.len());
+            println!("  Removed:   {} files", removed.len());
+            println!("  Unchanged: {} files", unchanged.len());
+            
+            // Calculate total size change
+            let mut size_change: i64 = 0;
+            for file_hash in &added {
+                if let Ok(data) = storage.retrieve(file_hash) {
+                    size_change += data.len() as i64;
+                }
+            }
+            for file_hash in &removed {
+                if let Ok(data) = storage.retrieve(file_hash) {
+                    size_change -= data.len() as i64;
+                }
+            }
+            
+            if size_change > 0 {
+                println!("  Size:      +{} bytes ({:.2} MB)", size_change, size_change as f64 / 1_048_576.0);
+            } else if size_change < 0 {
+                println!("  Size:      {} bytes ({:.2} MB)", size_change, size_change as f64 / 1_048_576.0);
+            } else {
+                println!("  Size:      No change");
+            }
         }
         Commands::Serve => {
             // Check if repository is initialized
