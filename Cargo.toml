@@ -31,12 +31,6 @@ exclude = [
 
 [dependencies]
 
-# Optimize for smaller binary size
-[profile.release]
-# Optimize for smaller binary size
-lto = true          # Enable Link-Time Optimization (LTO)
-codegen-units = "single" # Single compilation unit for better optimization
-strip = true          # Remove debug symbols
 clap = { version = "4.4", features = ["derive", "cargo"] }
 clap_complete = "4.5"
 blake3 = "1.5"
