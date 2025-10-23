@@ -303,7 +303,6 @@ async fn main() -> Result<()> {
             println!("Local peer ID: {}", network_manager.local_peer_id());
             
             // Discover peers for 10 seconds
-            let discovery_start = std::time::Instant::now();
             let discovery_duration = std::time::Duration::from_secs(10);
             
             println!("DEBUG: Starting peer discovery for {} seconds...", discovery_duration.as_secs());
@@ -571,7 +570,6 @@ async fn main() -> Result<()> {
             println!("Local peer ID: {}", network_manager.local_peer_id());
             
             // Discover peers for 10 seconds
-            let discovery_start = std::time::Instant::now();
             let discovery_duration = std::time::Duration::from_secs(10);
             
             println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
@@ -802,7 +800,6 @@ async fn main() -> Result<()> {
             
             // Discover peer
             println!("Discovering peer...");
-            let discovery_start = std::time::Instant::now();
             let discovery_duration = std::time::Duration::from_secs(10);
             
 // Simplified discovery loop
