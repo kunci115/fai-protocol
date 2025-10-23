@@ -5,7 +5,8 @@
 **Distributed Version Control for Large Files**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/kunci115/fai-protocol)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/kunci115/fai-protocol)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/kunci115/fai-protocol)
+[![Published](https://img.shields.io/badge/crates.io-v0.2.0-orange.svg)](https://crates.io/crates/fai-protocol)
 [![License](https://img.shields.io/badge/license-AGPL%203.0-red.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 
@@ -96,9 +97,15 @@ cd fai-protocol
 cargo install --path .
 ```
 
-### Using Cargo (Available Now)
+### Using Cargo (Published v0.2.0)
 ```bash
+# Install published version from crates.io
 cargo install fai-protocol
+
+# Or install latest from source
+git clone https://github.com/kunci115/fai-protocol.git
+cd fai-protocol
+cargo install --path .
 ```
 
 ### System Requirements
@@ -106,6 +113,17 @@ cargo install fai-protocol
 - **SQLite 3.35+** for metadata storage
 - **Network access** for peer discovery
 - **50MB+ disk space** for minimal installation
+
+### 🐚 Shell Completion
+```bash
+# Generate completion scripts
+fai completion bash > ~/.local/share/bash-completion/completions/fai
+fai completion fish > ~/.config/fish/completions/fai.fish
+fai completion zsh > ~/.zsh/completions/_fai
+
+# Install directly (bash)
+fai completion bash | sudo tee /etc/bash_completion.d/fai
+```
 
 ---
 
