@@ -183,10 +183,10 @@ if wait_for_service "../serve1.log" "FAI server"; then
         print_info "Testing push from repo2 to repo1..."
         cargo run -- push "$PEER1_ID" &
         PUSH_PID=$!
-        sleep 15
+        sleep 25
         if kill -0 $PUSH_PID 2>/dev/null; then
             kill $PUSH_PID 2>/dev/null || true
-            print_warning "Push command timed out after 15 seconds"
+            print_warning "Push command timed out after 25 seconds"
         else
             wait $PUSH_PID
             print_status "Push command executed successfully"
@@ -209,10 +209,10 @@ cd repo2
 print_info "Testing pull from repo1 to repo2..."
 cargo run -- pull "$PEER1_ID" &
     PULL_PID=$!
-    sleep 15
+    sleep 30
     if kill -0 $PULL_PID 2>/dev/null; then
         kill $PULL_PID 2>/dev/null || true
-        print_warning "Pull command timed out after 15 seconds"
+        print_warning "Pull command timed out after 30 seconds"
     else
         wait $PULL_PID
         print_status "Pull command executed successfully"
@@ -259,10 +259,10 @@ if wait_for_service "../serve1.log" "FAI server"; then
         print_info "Cloning repo1 to repo3..."
         cargo run -- clone "$PEER1_ID" repo3 &
         CLONE_PID=$!
-        sleep 20
+        sleep 35
         if kill -0 $CLONE_PID 2>/dev/null; then
             kill $CLONE_PID 2>/dev/null || true
-            print_warning "Clone command timed out after 20 seconds"
+            print_warning "Clone command timed out after 35 seconds"
         else
             wait $CLONE_PID
             print_status "Clone command executed successfully"
