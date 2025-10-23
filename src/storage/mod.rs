@@ -69,6 +69,8 @@ impl StorageManager {
         
         // Initialize metadata database
         let db = Connection::open(root.join("metadata.db"))?;
+        
+        // Create models table
         db.execute(
             "CREATE TABLE IF NOT EXISTS models (
                 hash TEXT PRIMARY KEY,
@@ -76,6 +78,37 @@ impl StorageManager {
                 version TEXT NOT NULL,
                 size INTEGER NOT NULL,
                 created_at TEXT NOT NULL
+            )",
+            [],
+        )?;
+        
+        // Create commits table for version control
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS commits (
+                hash TEXT PRIMARY KEY,
+                message TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        
+        // Create commit_files table to track files in each commit
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS commit_files (
+                commit_hash TEXT NOT NULL,
+                file_hash TEXT NOT NULL,
+                PRIMARY KEY (commit_hash, file_hash),
+                FOREIGN KEY (commit_hash) REFERENCES commits(hash)
+            )",
+            [],
+        )?;
+        
+        // Create staging table for files to be committed
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS staging (
+                file_path TEXT PRIMARY KEY,
+                file_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL
             )",
             [],
         )?;
