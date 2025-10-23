@@ -39,6 +39,19 @@ pub struct ModelMetadata {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// Information about a commit for P2P transfer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitInfo {
+    /// Commit hash
+    pub hash: String,
+    /// Commit message
+    pub message: String,
+    /// Timestamp as Unix epoch
+    pub timestamp: i64,
+    /// List of file hashes included in this commit
+    pub file_hashes: Vec<String>,
+}
+
 /// Storage manager for AI models
 #[derive(Clone)]
 pub struct StorageManager {
@@ -392,6 +405,127 @@ impl StorageManager {
         } else {
             Ok(None)
         }
+    }
+
+    /// Get all commits from the database
+    /// 
+    /// # Returns
+    /// Vector of CommitInfo for all commits
+    pub fn get_all_commits(&self) -> Result<Vec<CommitInfo>> {
+        let conn = self.db.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT c.hash, c.message, c.timestamp, cf.file_hash 
+             FROM commits c 
+             LEFT JOIN commit_files cf ON c.hash = cf.commit_hash 
+             ORDER BY c.timestamp DESC"
+        )?;
+        
+        let mut rows = stmt.query([])?;
+        let mut commits_map: std::collections::HashMap<String, (String, i64, Vec<String>)> = std::collections::HashMap::new();
+        
+        while let Some(row) = rows.next()? {
+            let hash: String = row.get(0)?;
+            let message: String = row.get(1)?;
+            let timestamp: i64 = row.get(2)?;
+            
+            let file_hash: Option<String> = row.get(3)?;
+            
+            let entry = commits_map.entry(hash.clone()).or_insert((message, timestamp, Vec::new()));
+            if let Some(fh) = file_hash {
+                entry.2.push(fh);
+            }
+        }
+        
+        let mut commits = Vec::new();
+        for (hash, (message, timestamp, file_hashes)) in commits_map {
+            commits.push(CommitInfo {
+                hash,
+                message,
+                timestamp,
+                file_hashes,
+            });
+        }
+        
+        Ok(commits)
+    }
+
+    /// Get a specific commit by hash
+    /// 
+    /// # Arguments
+    /// * `hash` - The commit hash
+    /// 
+    /// # Returns
+    /// The CommitInfo if found, None otherwise
+    pub fn get_commit(&self, hash: &str) -> Result<Option<CommitInfo>> {
+        let conn = self.db.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT c.hash, c.message, c.timestamp, cf.file_hash 
+             FROM commits c 
+             LEFT JOIN commit_files cf ON c.hash = cf.commit_hash 
+             WHERE c.hash = ?1"
+        )?;
+        
+        let mut rows = stmt.query([hash])?;
+        let mut file_hashes = Vec::new();
+        let mut commit_data = None;
+        
+        while let Some(row) = rows.next()? {
+            if commit_data.is_none() {
+                commit_data = Some((
+                    row.get(0)?,  // hash
+                    row.get(1)?,  // message  
+                    row.get(2)?   // timestamp
+                ));
+            }
+            
+            if let Some(file_hash) = row.get::<_, Option<String>>(3)? {
+                file_hashes.push(file_hash);
+            }
+        }
+        
+        if let Some((hash, message, timestamp)) = commit_data {
+            Ok(Some(CommitInfo {
+                hash,
+                message,
+                timestamp,
+                file_hashes,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Save a commit received from a remote peer
+    /// 
+    /// # Arguments
+    /// * `commit` - The commit information to save
+    /// 
+    /// # Returns
+    /// Ok(()) if successful
+    pub fn save_remote_commit(&self, commit: &CommitInfo) -> Result<()> {
+        let conn = self.db.lock().unwrap();
+        
+        // Start transaction
+        let tx = conn.transaction()?;
+        
+        // Insert commit (ignore if exists)
+        tx.execute(
+            "INSERT OR IGNORE INTO commits (hash, message, timestamp) VALUES (?1, ?2, ?3)",
+            [&commit.hash, &commit.message, &commit.timestamp],
+        )?;
+        
+        // Insert file associations
+        for file_hash in &commit.file_hashes {
+            tx.execute(
+                "INSERT OR IGNORE INTO commit_files (commit_hash, file_hash) VALUES (?1, ?2)",
+                [&commit.hash, file_hash],
+            )?;
+        }
+        
+        // Commit transaction
+        tx.commit()?;
+        
+        Ok(())
     }
 }
 
