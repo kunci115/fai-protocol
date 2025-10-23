@@ -1,11 +1,11 @@
 //! Database layer for FAI Protocol
-//! 
+//!
 //! Handles SQLite database operations for commits, staging, and file tracking.
 
 use anyhow::Result;
-use rusqlite::{Connection, params};
-use std::path::Path;
 use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection};
+use std::path::Path;
 
 /// Represents a commit in the FAI repository
 #[derive(Debug, Clone)]
@@ -28,10 +28,10 @@ pub struct DatabaseManager {
 
 impl DatabaseManager {
     /// Create a new database manager with the specified database path
-    /// 
+    ///
     /// # Arguments
     /// * `db_path` - Path to the SQLite database file
-    /// 
+    ///
     /// # Returns
     /// A new DatabaseManager instance
     pub fn new(db_path: &Path) -> Result<Self> {
@@ -41,13 +41,18 @@ impl DatabaseManager {
         Ok(db)
     }
 
+    /// Get access to the database connection (for network module usage)
+    pub fn connection(&self) -> &Connection {
+        &self.conn
+    }
+
     /// Initialize the database schema
-    /// 
+    ///
     /// Creates the necessary tables if they don't exist
     fn init_schema(&self) -> Result<()> {
         // Enable foreign key support
         self.conn.execute("PRAGMA foreign_keys = ON", [])?;
-        
+
         // Create commits table
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS commits (
@@ -87,7 +92,7 @@ impl DatabaseManager {
     }
 
     /// Add a file to the staging area
-    /// 
+    ///
     /// # Arguments
     /// * `path` - File path relative to repository root
     /// * `hash` - Content hash of the file
@@ -101,27 +106,21 @@ impl DatabaseManager {
     }
 
     /// Get all staged files
-    /// 
+    ///
     /// # Returns
     /// Vector of tuples containing (file_path, file_hash, file_size)
     pub fn get_staged_files(&self) -> Result<Vec<(String, String, u64)>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT file_path, file_hash, file_size FROM staging ORDER BY file_path"
-        )?;
-        
-        let rows = stmt.query_map([], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-            ))
-        })?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT file_path, file_hash, file_size FROM staging ORDER BY file_path")?;
+
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
 
         let mut files = Vec::new();
         for row in rows {
             files.push(row?);
         }
-        
+
         Ok(files)
     }
 
@@ -132,7 +131,7 @@ impl DatabaseManager {
     }
 
     /// Create a new commit
-    /// 
+    ///
     /// # Arguments
     /// * `hash` - Commit hash
     /// * `message` - Commit message
@@ -152,31 +151,40 @@ impl DatabaseManager {
         if message.trim().is_empty() {
             return Err(anyhow::anyhow!("Commit message cannot be empty"));
         }
-        
+
         // Insert commit with current timestamp in milliseconds for uniqueness
         let timestamp = Utc::now().timestamp_millis();
-        
+
         // Check if commit already exists
-        let existing_count: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM commits WHERE hash = ?1",
-            [hash],
-            |row| row.get(0)
-        ).unwrap_or(0);
-        
+        let existing_count: i64 = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM commits WHERE hash = ?1",
+                [hash],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
         if existing_count > 0 {
             println!("DEBUG: Commit {} already exists, skipping insertion", hash);
             return Ok(());
         }
-        
-        println!("DEBUG: Creating commit: hash={}, message={}, timestamp={}", hash, message, timestamp);
-        
+
+        println!(
+            "DEBUG: Creating commit: hash={}, message={}, timestamp={}",
+            hash, message, timestamp
+        );
+
         // Insert commit
         match self.conn.execute(
             "INSERT INTO commits (hash, message, timestamp, parent_hash) VALUES (?1, ?2, ?3, ?4)",
             params![hash, message, timestamp, parent],
         ) {
             Ok(rows) => {
-                println!("DEBUG: Successfully inserted commit, rows affected: {}", rows);
+                println!(
+                    "DEBUG: Successfully inserted commit, rows affected: {}",
+                    rows
+                );
             }
             Err(e) => {
                 println!("DEBUG: Failed to insert commit: {}", e);
@@ -186,7 +194,10 @@ impl DatabaseManager {
 
         // Insert commit files
         for (file_path, file_hash, file_size) in files {
-            println!("DEBUG: Inserting commit file: path={}, hash={}, size={}", file_path, file_hash, file_size);
+            println!(
+                "DEBUG: Inserting commit file: path={}, hash={}, size={}",
+                file_path, file_hash, file_size
+            );
             match self.conn.execute(
                 "INSERT INTO commit_files (commit_hash, file_path, file_hash, file_size) VALUES (?1, ?2, ?3, ?4)",
                 params![hash, file_path, file_hash, file_size],
@@ -205,17 +216,17 @@ impl DatabaseManager {
     }
 
     /// Get commit information by hash
-    /// 
+    ///
     /// # Arguments
     /// * `hash` - Commit hash
-    /// 
+    ///
     /// # Returns
     /// The commit if found, None otherwise
     pub fn get_commit(&self, hash: &str) -> Result<Option<Commit>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT hash, message, timestamp, parent_hash FROM commits WHERE hash = ?1"
-        )?;
-        
+        let mut stmt = self
+            .conn
+            .prepare("SELECT hash, message, timestamp, parent_hash FROM commits WHERE hash = ?1")?;
+
         let mut rows = stmt.query([hash])?;
         if let Some(row) = rows.next()? {
             Ok(Some(Commit {
@@ -230,42 +241,36 @@ impl DatabaseManager {
     }
 
     /// Get all files associated with a commit
-    /// 
+    ///
     /// # Arguments
     /// * `hash` - Commit hash
-    /// 
+    ///
     /// # Returns
     /// Vector of tuples containing (file_path, file_hash, file_size)
     pub fn get_commit_files(&self, hash: &str) -> Result<Vec<(String, String, u64)>> {
         let mut stmt = self.conn.prepare(
             "SELECT file_path, file_hash, file_size FROM commit_files WHERE commit_hash = ?1 ORDER BY file_path"
         )?;
-        
-        let rows = stmt.query_map([hash], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-            ))
-        })?;
+
+        let rows = stmt.query_map([hash], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
 
         let mut files = Vec::new();
         for row in rows {
             files.push(row?);
         }
-        
+
         Ok(files)
     }
 
     /// Get the latest commit (HEAD)
-    /// 
+    ///
     /// # Returns
     /// The latest commit hash if any commits exist
     pub fn get_head(&self) -> Result<Option<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT hash FROM commits ORDER BY timestamp DESC, hash DESC LIMIT 1"
-        )?;
-        
+        let mut stmt = self
+            .conn
+            .prepare("SELECT hash FROM commits ORDER BY timestamp DESC, hash DESC LIMIT 1")?;
+
         let mut rows = stmt.query([])?;
         if let Some(row) = rows.next()? {
             Ok(Some(row.get(0)?))
@@ -275,21 +280,22 @@ impl DatabaseManager {
     }
 
     /// Get commit history
-    /// 
+    ///
     /// # Arguments
     /// * `limit` - Maximum number of commits to return (None for all)
-    /// 
+    ///
     /// # Returns
     /// Vector of commits ordered by timestamp (newest first)
     pub fn get_commit_history(&self, limit: Option<i32>) -> Result<Vec<Commit>> {
         let query = if let Some(limit) = limit {
             format!("SELECT hash, message, timestamp, parent_hash FROM commits ORDER BY timestamp DESC LIMIT {}", limit)
         } else {
-            "SELECT hash, message, timestamp, parent_hash FROM commits ORDER BY timestamp DESC".to_string()
+            "SELECT hash, message, timestamp, parent_hash FROM commits ORDER BY timestamp DESC"
+                .to_string()
         };
-        
+
         let mut stmt = self.conn.prepare(&query)?;
-        
+
         let rows = stmt.query_map([], |row| {
             Ok(Commit {
                 hash: row.get(0)?,
@@ -303,7 +309,7 @@ impl DatabaseManager {
         for row in rows {
             commits.push(row?);
         }
-        
+
         Ok(commits)
     }
 }
@@ -323,18 +329,18 @@ mod tests {
     #[test]
     fn test_staging_operations() {
         let (db, _temp_dir) = create_temp_database();
-        
+
         // Test adding to staging
         db.add_to_staging("test.txt", "hash123", 100).unwrap();
         db.add_to_staging("model.onnx", "hash456", 2048).unwrap();
-        
+
         // Test getting staged files
         let staged = db.get_staged_files().unwrap();
         assert_eq!(staged.len(), 2);
         // Check that both files are present (order guaranteed by ORDER BY file_path)
         assert!(staged.contains(&("model.onnx".to_string(), "hash456".to_string(), 2048)));
         assert!(staged.contains(&("test.txt".to_string(), "hash123".to_string(), 100)));
-        
+
         // Test clearing staging
         db.clear_staging().unwrap();
         let staged = db.get_staged_files().unwrap();
@@ -344,14 +350,15 @@ mod tests {
     #[test]
     fn test_commit_operations() {
         let (db, _temp_dir) = create_temp_database();
-        
+
         // Create initial commit
         let files = vec![
             ("file1.txt".to_string(), "hash1".to_string(), 100),
             ("file2.txt".to_string(), "hash2".to_string(), 200),
         ];
-        db.create_commit("commit1", "Initial commit", None, &files).unwrap();
-        
+        db.create_commit("commit1", "Initial commit", None, &files)
+            .unwrap();
+
         // Test getting commit
         let commit = db.get_commit("commit1").unwrap();
         assert!(commit.is_some());
@@ -359,32 +366,33 @@ mod tests {
         assert_eq!(commit.hash, "commit1");
         assert_eq!(commit.message, "Initial commit");
         assert_eq!(commit.parent_hash, None);
-        
+
         // Test getting commit files
         let commit_files = db.get_commit_files("commit1").unwrap();
         assert_eq!(commit_files.len(), 2);
         // Check that both files are present (order guaranteed by ORDER BY file_path)
         assert!(commit_files.contains(&("file1.txt".to_string(), "hash1".to_string(), 100)));
         assert!(commit_files.contains(&("file2.txt".to_string(), "hash2".to_string(), 200)));
-        
+
         // Test HEAD
         let head = db.get_head().unwrap();
         assert_eq!(head, Some("commit1".to_string()));
-        
+
         // Create second commit with parent (add small delay to ensure different timestamp)
         std::thread::sleep(std::time::Duration::from_millis(10));
         let files2 = vec![
             ("file1.txt".to_string(), "hash1_updated".to_string(), 150),
             ("file3.txt".to_string(), "hash3".to_string(), 300),
         ];
-        db.create_commit("commit2", "Second commit", Some("commit1"), &files2).unwrap();
-        
+        db.create_commit("commit2", "Second commit", Some("commit1"), &files2)
+            .unwrap();
+
         // Test HEAD updated
         let head = db.get_head().unwrap();
         println!("Debug: HEAD = {:?}", head);
         println!("Debug: Expected = {:?}", Some("commit2".to_string()));
         assert_eq!(head, Some("commit2".to_string()));
-        
+
         // Test commit history
         let history = db.get_commit_history(None).unwrap();
         assert_eq!(history.len(), 2);

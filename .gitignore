@@ -1,3 +1,55 @@
+# Test artifacts and debug directories
+debug_*/
+test_*/
+pull_test_*/
+*_test_*/
+*.log
+fai_peers.txt
+
+# FAI repositories (test data)
+.fai/
+*.db
+*.db-*
+
+# Build artifacts
+/target/
+*.rlib
+
+# Cargo
+Cargo.lock
+.cargo_token
+
+# IDE
+.vscode/
+.idea/
+*.iml
+.DS_Store
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# Publishing scripts (keep local)
+publish_to_crates.sh
+PUBLISHING.md
+
+# Aider files
 .aider*
 .env
-target/
+
+# Build artifacts (already there but let's be explicit)
+/target/
+Cargo.lock
+*.rlib
+.rustc_info.json
+
+# Aider files
+.aider*
+.env
+
+# Build artifacts (already there but let's be explicit)
+/target/
+Cargo.lock
+*.rlib
+.rustc_info.json
