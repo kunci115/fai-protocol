@@ -2,42 +2,59 @@
 
 # 🔮 FAI Protocol
 
-**Decentralized Version Control for AI Models**
+**Distributed Version Control for Large Files**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/fai-protocol/fai-protocol)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/fai-protocol/fai-protocol)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 
-*A peer-to-peer version control system designed specifically for AI/ML model management and collaboration*
+*Git for large files, done right - True P2P version control for anything from 100MB to TB*
 
 ---
 
-[Quick Start](#-quick-start-in-60-seconds) • [Installation](#-installation) • [Documentation](#-usage-examples) • [Architecture](#-architecture)
+[Quick Start](#-quick-start-in-60-seconds) • [Installation](#-installation) • [Use Cases](#-use-cases-by-industry) • [Architecture](#-architecture)
 
 </div>
 
 ---
 
-## 🎯 Why FAI Protocol?
+## 🎯 The Problem
 
-### The Problem
-Traditional version control systems weren't designed for AI/ML workflows:
-- **Git struggles with large binary files** (models can be GBs in size)
-- **Centralized platforms create vendor lock-in** and single points of failure
-- **No built-in model versioning** for tracking training iterations and experiments
-- **Collaboration barriers** when sharing models across organizations
+**Working with large files (>100MB) is painful:**
 
-### Our Solution
-FAI Protocol combines the best of distributed version control with AI-specific features:
+- **Git chokes** on anything over 100MB
+- **Git LFS** is expensive and centralized ($5/mo per 50GB)
+- **Dropbox/Drive** have no version control
+- **Perforce** costs $500 per user
+- **Cloud storage** is expensive and slow
 
-✅ **Content-addressed storage** with BLAKE3 hashing for integrity  
-✅ **Automatic file chunking** for efficient large model distribution  
-✅ **Peer-to-peer networking** with no central servers required  
-✅ **Git-like workflow** that developers already understand  
-✅ **Built for AI/ML** with model metadata and experiment tracking  
+## 🚀 The Solution
+
+**FAI Protocol is Git for large files, done right:**
+
+✅ **True P2P** - No central server needed  
+✅ **Any file size** - GB to TB, no limits  
+✅ **Smart chunking** - 1MB chunks with deduplication  
+✅ **Offline-first** - Works on LAN without internet  
+✅ **Git-like workflow** - Familiar commands  
+✅ **Free forever** - Open source, no subscriptions  
 
 ---
+
+## 🎯 Who Is This For?
+
+**FAI is for anyone working with large files:**
+
+🎮 **Game Developers** - Version control for 50GB+ asset libraries  
+🎬 **Video Editors** - Track edits on TB of raw footage  
+🤖 **AI Researchers** - Share 10GB+ model checkpoints  
+🧬 **Scientists** - Collaborate on large datasets  
+📦 **Software Teams** - Distribute large binaries  
+🏗️ **Architects** - Version CAD files and 3D models  
+📸 **Photographers** - Manage RAW photo libraries  
+🎵 **Music Producers** - Collaborate on multi-GB projects  
+💾 **Anyone** - Who needs version control + large files  
 
 ## 🚀 Quick Start in 60 Seconds
 
@@ -49,12 +66,12 @@ cargo install fai-protocol
 fai init
 ✅ Initialized FAI repository in .fai/
 
-# Add a trained model
-fai add models/resnet50.onnx
-✅ Added models/resnet50.onnx (abc12345)
+# Add large files (any size!)
+fai add my-large-file.bin
+✅ Added my-large-file.bin (abc12345)
 
 # Commit your changes
-fai commit -m "Initial ResNet-50 model"
+fai commit -m "Initial commit"
 ✅ Created commit abc12345
 
 # Start sharing with peers
@@ -62,7 +79,7 @@ fai serve
 🌐 Listening on /ip4/192.168.1.100/tcp/4001
 ```
 
-*That's it! You're now running a decentralized AI model repository.*
+*That's it! You're now running a decentralized large file repository.*
 
 ---
 
@@ -98,27 +115,29 @@ cargo install fai-protocol
 # Initialize a new repository
 fai init
 
-# Add model files (handles large files automatically)
-fai add models/bert-base.pt
-fai add datasets/training-data.csv
+# Add large files (handles any size automatically)
+fai add game-assets/textures/
+fai add video-project/footage/
+fai add ml-models/resnet50.pt
 
 # Check what's staged for commit
 fai status
 → Changes to be committed:
-→   models/bert-base.pt (abc12345 - 420MB)
-→   datasets/training-data.csv (def67890 - 2.1GB)
+→   game-assets/textures/ (abc12345 - 2.3GB)
+→   video-project/footage/ (def67890 - 8.7GB)
+→   ml-models/resnet50.pt (fedcba98 - 420MB)
 
 # Create commits with meaningful messages
-fai commit -m "Add BERT base model and training dataset"
-fai commit -m "Update model with improved accuracy"
+fai commit -m "Add game texture pack and 4K footage"
+fai commit -m "Update ResNet model with improved accuracy"
 
 # View commit history
 fai log
 → commit xyz78901 (2024-01-15 14:30:22)
-→     Update model with improved accuracy
+→     Update ResNet model with improved accuracy
 → 
 → commit abc12345 (2024-01-15 12:15:10)
-→     Add BERT base model and training dataset
+→     Add game texture pack and 4K footage
 ```
 
 ### Distributed Collaboration
@@ -153,29 +172,29 @@ fai push 12D3KooWM9ek9txt9kzjoDwU48CKPvSZQBFPNM1UWNXmp9WCgRpp
 ✅ Push complete!
 ```
 
-### Model Management
+### File Management
 ```bash
-# Compare different model versions
+# Compare different versions
 fai diff abc12345 xyz78901
 📊 Comparing commits:
-→ Commit 1: abc12345 - "Add BERT base model"
+→ Commit 1: abc12345 - "Add game texture pack"
 →    Date: 2024-01-15 12:15:10
 →    Files: 2
 
-→ Commit 2: xyz78901 - "Update model with improved accuracy"  
+→ Commit 2: xyz78901 - "Update textures with 4K versions"  
 →    Date: 2024-01-15 14:30:22
 →    Files: 2
 
 🔄 Changes:
 ➕ Added files (1):
-  + fedcba98 (125MB)
+  + fedcba98 (1.2GB)
 
 ➖ Removed files (1):
-  - abc12345 (120MB)
+  - abc12345 (800MB)
 
 📈 Summary:
   Added: 1 files, Removed: 1 files
-  Size: +5MB (improved compression)
+  Size: +400MB (higher quality assets)
 
 # Check chunk information for large files
 fai chunks abc12345
@@ -186,9 +205,9 @@ fai chunks abc12345
   2: chunk003 (120MB)
 📊 Total: 3 chunks, 320MB (1.53GB original)
 
-# Fetch specific model files from peers
+# Fetch specific files from peers
 fai fetch 12D3KooWM9ek9txt9kzjoDwU48CKPvSZQBFPNM1UWNXmp9WCgRpp abc12345
-📥 Fetching model abc12345...
+📥 Fetching file abc12345...
 ✅ Downloaded 320MB in 12 seconds
 💾 Saved to: fetched_abc12345.dat
 ```
@@ -250,60 +269,113 @@ fai fetch 12D3KooWM9ek9txt9kzjoDwU48CKPvSZQBFPNM1UWNXmp9WCgRpp abc12345
 
 ---
 
-## 🆚 Comparison: FAI vs Git vs HuggingFace
+## 🆚 Why FAI Beats Everything
 
-| Feature | FAI Protocol | Git LFS | Hugging Face Hub |
-|---------|--------------|---------|------------------|
-| **Decentralized** | ✅ P2P network | ❌ Centralized | ❌ Centralized |
-| **Large File Support** | ✅ Built-in chunking | ⚠️ LFS required | ✅ Optimized |
-| **Version Control** | ✅ Git-like commands | ✅ Full Git | ❌ Limited |
-| **Model Metadata** | ✅ Built-in tracking | ❌ Manual | ✅ Rich metadata |
-| **Collaboration** | ✅ Direct peer sharing | ✅ Remotes | ✅ Sharing platform |
-| **Privacy** | ✅ Local-first | ✅ Self-hosted | ⚠️ Platform dependent |
-| **Performance** | ✅ Parallel transfers | ⚠️ Sequential | ✅ CDN optimized |
-| **Offline Work** | ✅ Full offline support | ✅ Standard | ❌ Requires internet |
-| **Cost** | ✅ Free infrastructure | ✅ Self-hosted | 💰 Platform fees |
+| Feature | Git | Git LFS | Dropbox | Perforce | **FAI** |
+|---------|-----|---------|---------|----------|---------|
+| **Large files** | ❌ | ⚠️ Limited | ✅ | ✅ | ✅ |
+| **Version control** | ✅ | ✅ | ❌ | ✅ | ✅ |
+| **P2P distributed** | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Offline-first** | ✅ | ❌ | ❌ | ⚠️ | ✅ |
+| **No server costs** | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **Deduplication** | ❌ | ❌ | ⚠️ | ⚠️ | ✅ |
+| **Cost** | Free | $60+/yr | $120+/yr | $500+/yr | **Free** |
+
+### Real-World Examples
+
+#### 🎮 Game Studio
+**Problem:** 50GB asset library, 100 developers, Git LFS costs $2000/month
+
+**With FAI:**
+```bash
+fai init
+fai add assets/
+fai commit -m "New texture pack"
+fai serve  # Other devs clone from you
+
+Cost: $0/month
+Speed: 10Gbps on LAN vs slow internet
+```
+
+#### 🎬 Video Production Team
+**Problem:** 1TB raw footage, 5 editors, need version control
+
+**With FAI:**
+```bash
+fai init
+fai add footage/
+fai commit -m "Day 1 raw footage"
+fai serve  # Editors pull from you
+
+Benefits:
+✅ Version control for every edit
+✅ P2P sharing on local network
+✅ No cloud upload/download
+✅ Instant rollback to any version
+```
+
+#### 📦 Open Source Dataset
+**Problem:** Share 100GB dataset, bandwidth costs $$$ with popularity
+
+**With FAI:**
+```bash
+fai init
+fai add dataset/
+fai commit -m "Dataset v1.0"
+fai serve  # Users seed to each other
+
+Benefits:
+✅ Users share with each other (BitTorrent effect)
+✅ More users = faster for everyone
+✅ Zero bandwidth costs
+```
 
 ---
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1: Core Foundation (Complete)
+### ✅ Phase 1: Local version control (Done)
 - [x] Basic repository operations (init, add, commit)
 - [x] Content-addressed storage with BLAKE3
 - [x] SQLite database for metadata
 - [x] CLI interface with Clap
 
-### ✅ Phase 2: Storage System (Complete)  
-- [x] Automatic file chunking for large models
-- [x] Content deduplication
-- [x] Thread-safe storage operations
-- [x] File reconstruction from chunks
-
-### ✅ Phase 3: Network Layer (Complete)
+### ✅ Phase 2: P2P file transfer (Done)
 - [x] libp2p integration
 - [x] mDNS peer discovery
 - [x] Request-response protocol
 - [x] Async networking with Tokio
 
-### ✅ Phase 4: Distributed Version Control (Complete)
+### ✅ Phase 3: Large file support (Done)
+- [x] Automatic file chunking for large files
+- [x] Content deduplication
+- [x] Thread-safe storage operations
+- [x] File reconstruction from chunks
+
+### ✅ Phase 4: Distributed version control (Done)
 - [x] Push/pull operations between peers
 - [x] Repository cloning
 - [x] Commit comparison with diff
 - [x] Multi-chunk file transfer
 - [x] Network reliability improvements
 
-### 🚧 Phase 5: Advanced Features (In Progress)
+### 🚧 Phase 5: Production hardening (In Progress)
 - [ ] **Branching and merging** - Full Git-like branch support
 - [ ] **Access control** - Encryption and permissions
 - [ ] **Web interface** - Browser-based repository management
 - [ ] **CI/CD integration** - GitHub Actions, GitLab CI
 
-### 🔮 Phase 6: Ecosystem (Future)
-- [ ] **Plugin system** - Custom model analysis tools
+### ⏳ Phase 6: Global P2P (Future)
+- [ ] **DHT integration** - Global peer discovery without mDNS
+- [ ] **NAT traversal** - Work through firewalls and routers
+- [ ] **Relay nodes** - Help peers behind restrictive networks
 - [ ] **Mobile apps** - iOS/Android clients
+
+### 🔮 Phase 7: Advanced features (Future)
+- [ ] **Plugin system** - Custom file analysis tools
 - [ ] **Cloud integration** - AWS, GCP, Azure storage backends
 - [ ] **Enterprise features** - SSO, audit logs, compliance
+- [ ] **WebRTC support** - Browser-to-browser transfers
 
 ---
 
@@ -351,32 +423,78 @@ fai-protocol/
 └── README.md            # This file
 ```
 
+## 📚 Use Cases by Industry
+
+### 🎮 Gaming
+- **Asset management** - Version control for textures, models, audio
+- **Build distribution** - Share game builds with team members
+- **Level design collaboration** - Multiple designers working on same project
+- **Mod support** - Enable community content sharing
+
+### 🎬 Media Production
+- **Raw footage versioning** - Track edits on TB of raw footage
+- **Render farm distribution** - Share files between render nodes
+- **Project collaboration** - Multiple editors working on same project
+- **Archive management** - Organize years of media assets
+
+### 🤖 AI/ML
+- **Model checkpoint sharing** - Share 10GB+ model checkpoints
+- **Dataset distribution** - Collaborate on large datasets
+- **Experiment tracking** - Version control for training iterations
+- **Research collaboration** - Share results between research teams
+
+### 🧬 Scientific Research
+- **Large dataset collaboration** - Genomic data, climate models
+- **Reproducible research** - Version control for all research data
+- **Lab data backup** - Secure backup of experimental data
+- **Cross-institution collaboration** - Share data between universities
+
+### 📦 Software Development
+- **Binary distribution** - Version control for compiled binaries
+- **Release management** - Track different release versions
+- **Large dependency management** - Version control for large libraries
+- **Build artifacts** - Store and share build outputs
+
+### 🏗️ Engineering
+- **CAD file versioning** - Track changes to engineering designs
+- **3D model collaboration** - Multiple engineers on same project
+- **Design review workflows** - Version control for design iterations
+- **Manufacturing data** - Share large CAD files with manufacturers
+
+### 📸 Creative Work
+- **Photo library management** - Version control for RAW photo libraries
+- **Asset pipeline** - Track creative assets through production
+- **Portfolio backups** - Secure backup of creative work
+- **Client collaboration** - Share large files with clients
+
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
+**We're building the future of distributed version control!**
 
-### For Developers
+**Areas needing help:**
+- **Testing** with various file types and sizes
+- **Performance optimization** for different workloads
+- **Documentation** and tutorials for specific industries
+- **Platform support** (Windows, macOS, Linux)
+- **Feature requests** from real users like you
+
+**For Developers:**
 1. **Fork the repository** and create a feature branch
 2. **Add tests** for any new functionality
 3. **Ensure all tests pass** with `cargo test`
 4. **Follow Rust conventions** with `cargo fmt` and `cargo clippy`
 5. **Submit a pull request** with a clear description
 
-### Areas for Contribution
-- **New command implementations** (branch, merge, tag)
-- **Performance optimizations** (parallel chunking, compression)
-- **Network protocol improvements** (better discovery, reliability)
-- **Documentation and examples** (tutorials, use cases)
-- **Testing and quality** (property tests, benchmarks)
-
-### Code Standards
+**Code Standards:**
 - **Rust 2021 edition** with safe rust practices
 - **Async/await** for all I/O operations
 - **Comprehensive error handling** with `anyhow`
 - **Documentation comments** for all public APIs
 - **Unit test coverage** > 90%
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
@@ -418,8 +536,14 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ## 🙏 Acknowledgments
 
-FAI Protocol builds upon amazing open-source projects:
+**Built with love for everyone tired of:**
+- Git's 100MB limit
+- Git LFS's monthly bills
+- Dropbox's lack of version control
+- Perforce's enterprise pricing
+- Cloud storage costs
 
+**FAI Protocol builds upon amazing open-source projects:**
 - **[libp2p](https://libp2p.io/)** - Modular peer-to-peer networking
 - **[BLAKE3](https://github.com/BLAKE3-team/BLAKE3)** - High-performance cryptographic hashing  
 - **[SQLite](https://sqlite.org/)** - Reliable embedded database
@@ -430,15 +554,17 @@ FAI Protocol builds upon amazing open-source projects:
 - **Git** - Version control workflow and concepts
 - **IPFS** - Content-addressed storage and networking
 - **DVC** - Data version control for machine learning
-- **Hugging Face** - AI/ML model hub and ecosystem
+- **BitTorrent** - Efficient P2P file distribution
 
 ---
 
 <div align="center">
 
-**🔮 Ready to decentralize your AI model workflow?**
+**🔮 Ready to decentralize your large file workflow?**
 
-[Get Started](#-quick-start-in-60-seconds) • [Documentation](docs/) • [Discord Community](https://discord.gg/fai-protocol) • [Twitter @FAIProtocol](https://twitter.com/fai_protocol)
+[Get Started](#-quick-start-in-60-seconds) • [Use Cases](#-use-cases-by-industry) • [Documentation](docs/) • [Contributing](#-contributing)
+
+**FAI Protocol: Version control for the files Git forgot.** 🚀
 
 Made with ❤️ by the FAI Protocol community
 
