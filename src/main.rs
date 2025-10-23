@@ -49,6 +49,13 @@ enum Commands {
         /// Peer ID to push to
         peer_id: String,
     },
+    /// Pull commits and files from a peer
+    Pull {
+        /// Peer ID to pull from
+        peer_id: String,
+        /// Optional specific commit hash to pull (pulls all if not specified)
+        commit_hash: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -608,6 +615,112 @@ async fn main() -> Result<()> {
             }
             
             println!("✓ Pushed {} commits to peer {}", commit_infos.len(), peer_id);
+        }
+        Commands::Pull { peer_id, commit_hash } => {
+            // Check if repository is initialized
+            if !Path::new(".fai").exists() {
+                return Err(anyhow::anyhow!("Not a FAI repository. Run 'fai init' first."));
+            }
+            
+            // Parse peer ID
+            let target_peer = PeerId::from_str(&peer_id)
+                .map_err(|_| anyhow::anyhow!("Invalid peer ID format: {}", peer_id))?;
+            
+            println!("Pulling commits from peer {}...", peer_id);
+            
+            // Create storage manager
+            let storage = Arc::new(fai_protocol::storage::StorageManager::new(
+                Path::new(".fai").to_path_buf()
+            )?);
+            
+            // Create network manager
+            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone()) {
+                Ok(nm) => nm,
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                }
+            };
+            
+            // Start the network manager
+            if let Err(e) = network_manager.start() {
+                return Err(anyhow::anyhow!("Failed to start network manager: {}", e));
+            }
+            
+            println!("Local peer ID: {}", network_manager.local_peer_id());
+            
+            // Discover peers for 10 seconds
+            let discovery_start = std::time::Instant::now();
+            let discovery_duration = std::time::Duration::from_secs(10);
+            
+            println!("Discovering peers for {} seconds...", discovery_duration.as_secs());
+            
+            while discovery_start.elapsed() < discovery_duration {
+                if let Err(e) = network_manager.poll_events().await {
+                    eprintln!("Error during peer discovery: {}", e);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            
+            // Check if target peer was discovered
+            let peers = network_manager.list_peers();
+            let target_peer_found = peers.iter().any(|p| p.peer_id == target_peer);
+            
+            if !target_peer_found {
+                println!("Discovered {} peers, but target peer {} not found", peers.len(), peer_id);
+                for peer in &peers {
+                    println!("  - {}", peer.peer_id);
+                }
+                return Err(anyhow::anyhow!("Peer {} not discovered in local network", peer_id));
+            }
+            
+            println!("Found peer {}", peer_id);
+            
+            // Request commits from peer
+            println!("Requesting commits from peer {}...", peer_id);
+            let commits = network_manager.request_commits(target_peer.clone(), commit_hash.clone()).await?;
+            
+            if commits.is_empty() {
+                println!("No new commits to pull");
+                return Ok(());
+            }
+            
+            println!("Found {} commits to pull", commits.len());
+            
+            // For each commit, pull the files
+            for commit in commits {
+                println!("Pulling commit: {} - {}", &commit.hash[..8], commit.message);
+                
+                // Download all files referenced in this commit
+                for file_hash in &commit.file_hashes {
+                    println!("  Fetching file {}...", &file_hash[..8]);
+                    
+                    // Check if we already have this file
+                    if storage.retrieve(file_hash).is_ok() {
+                        println!("  ✓ Already have file {}", &file_hash[..8]);
+                        continue;
+                    }
+                    
+                    // Download the file (reuse fetch logic)
+                    match network_manager.request_chunk(target_peer.clone(), file_hash).await {
+                        Ok(Some(data)) => {
+                            storage.store(&data)?;
+                            println!("  ✓ Downloaded file {} ({} bytes)", &file_hash[..8], data.len());
+                        }
+                        Ok(None) => {
+                            println!("  ✗ File {} not available", &file_hash[..8]);
+                        }
+                        Err(e) => {
+                            println!("  ✗ Failed to download file {}: {}", &file_hash[..8], e);
+                        }
+                    }
+                }
+                
+                // Save the commit to local database
+                storage.save_remote_commit(&commit)?;
+                println!("✓ Pulled commit: {}", &commit.hash[..8]);
+            }
+            
+            println!("✓ Pull complete! Pulled {} commits", commits.len());
         }
         Commands::Serve => {
             // Check if repository is initialized

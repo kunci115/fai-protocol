@@ -48,6 +48,20 @@ pub struct ChunkResponse {
     pub data: Option<Vec<u8>>,
 }
 
+/// Request for commits from a peer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitRequest {
+    /// Optional commit hash (None = get all commits)
+    pub commit_hash: Option<String>,
+}
+
+/// Response containing commit information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitResponse {
+    /// List of commits
+    pub commits: Vec<crate::storage::CommitInfo>,
+}
+
 /// Simple network behavior for peer discovery and chunk requests
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "FAIEvent")]
@@ -56,6 +70,8 @@ pub struct FAIBehaviour {
     mdns: mdns::tokio::Behaviour,
     /// Request-response protocol for chunk requests
     request_response: libp2p::request_response::cbor::Behaviour<ChunkRequest, ChunkResponse>,
+    /// Request-response protocol for commit requests
+    commit_response: libp2p::request_response::cbor::Behaviour<CommitRequest, CommitResponse>,
 }
 
 /// Network events
@@ -63,6 +79,7 @@ pub struct FAIBehaviour {
 pub enum FAIEvent {
     Mdns(mdns::Event),
     RequestResponse(libp2p::request_response::Event<ChunkRequest, ChunkResponse>),
+    CommitResponse(libp2p::request_response::Event<CommitRequest, CommitResponse>),
 }
 
 impl From<mdns::Event> for FAIEvent {
@@ -74,6 +91,12 @@ impl From<mdns::Event> for FAIEvent {
 impl From<libp2p::request_response::Event<ChunkRequest, ChunkResponse>> for FAIEvent {
     fn from(event: libp2p::request_response::Event<ChunkRequest, ChunkResponse>) -> Self {
         FAIEvent::RequestResponse(event)
+    }
+}
+
+impl From<libp2p::request_response::Event<CommitRequest, CommitResponse>> for FAIEvent {
+    fn from(event: libp2p::request_response::Event<CommitRequest, CommitResponse>) -> Self {
+        FAIEvent::CommitResponse(event)
     }
 }
 
@@ -100,11 +123,15 @@ impl NetworkManager {
         let local_key = Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(local_key.public());
 
-        // Create behavior with mDNS and chunk request/response
+        // Create behavior with mDNS and chunk/commit request/response
         let behaviour = FAIBehaviour {
             mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
                 [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
+                libp2p::request_response::Config::default(),
+            ),
+            commit_response: libp2p::request_response::cbor::Behaviour::new(
+                [(libp2p::StreamProtocol::new("/fai/commit/1.0.0"), ProtocolSupport::Full)],
                 libp2p::request_response::Config::default(),
             ),
         };
@@ -247,6 +274,67 @@ impl NetworkManager {
                         }
                     }
                 }
+                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                    libp2p::request_response::Event::Message { 
+                        peer, 
+                        message 
+                    }
+                )) => {
+                    match message {
+                        libp2p::request_response::Message::Request { 
+                            request, 
+                            channel, 
+                            request_id,
+                            ..
+                        } => {
+                            println!("DEBUG: Received commit request from {} (request_id: {:?})", peer, request_id);
+                            
+                            // Get commits from storage
+                            let commits = if let Some(hash) = &request.commit_hash {
+                                // Get specific commit
+                                match self.storage.get_commit(hash) {
+                                    Ok(Some(commit)) => vec![commit],
+                                    Ok(None) => {
+                                        println!("Commit {} not found", hash);
+                                        vec![]
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Error getting commit {}: {}", hash, e);
+                                        vec![]
+                                    }
+                                }
+                            } else {
+                                // Get all commits
+                                match self.storage.get_all_commits() {
+                                    Ok(commits) => commits,
+                                    Err(e) => {
+                                        eprintln!("Error getting all commits: {}", e);
+                                        vec![]
+                                    }
+                                }
+                            };
+                            
+                            let response = CommitResponse { commits };
+                            
+                            println!("Sending {} commits to peer {}", response.commits.len(), peer);
+                            
+                            if let Err(e) = self.swarm.behaviour_mut().commit_response.send_response(
+                                channel,
+                                response
+                            ) {
+                                eprintln!("Failed to send commit response: {:?}", e);
+                            }
+                        }
+                        libp2p::request_response::Message::Response { 
+                            request_id, 
+                            response,
+                            ..
+                        } => {
+                            println!("DEBUG: Received commit response for request {:?}: {} commits", 
+                                request_id, response.commits.len());
+                        }
+                    }
+                }
                 SwarmEvent::Behaviour(FAIEvent::RequestResponse(
                     libp2p::request_response::Event::OutboundFailure { 
                         request_id, 
@@ -264,6 +352,24 @@ impl NetworkManager {
                     }
                 )) => {
                     println!("DEBUG: Inbound request failed: request_id={:?}, peer={:?}, error={:?}", request_id, failure_peer, error);
+                }
+                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                    libp2p::request_response::Event::OutboundFailure { 
+                        request_id, 
+                        peer: failure_peer, 
+                        error 
+                    }
+                )) => {
+                    println!("DEBUG: Commit request failed: request_id={:?}, peer={:?}, error={:?}", request_id, failure_peer, error);
+                }
+                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                    libp2p::request_response::Event::InboundFailure { 
+                        request_id, 
+                        peer: failure_peer, 
+                        error 
+                    }
+                )) => {
+                    println!("DEBUG: Commit inbound request failed: request_id={:?}, peer={:?}, error={:?}", request_id, failure_peer, error);
                 }
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Listening on {}", address);
@@ -462,5 +568,112 @@ impl NetworkManager {
         }
         
         Ok(None)
+    }
+
+    /// Request commits from a peer
+    /// 
+    /// # Arguments
+    /// * `peer` - The peer to request from
+    /// * `commit_hash` - Optional specific commit hash to request
+    /// 
+    /// # Returns
+    /// Vector of commits
+    pub async fn request_commits(&mut self, peer: PeerId, commit_hash: Option<String>) -> Result<Vec<crate::storage::CommitInfo>> {
+        println!("DEBUG: request_commits called with peer={}, commit_hash={:?}", peer, commit_hash);
+        
+        // Check if we have an active connection to this peer
+        let connected_peers = self.swarm.connected_peers().collect::<Vec<_>>();
+        println!("DEBUG: Currently connected to {} peers: {:?}", connected_peers.len(), connected_peers);
+        
+        if !connected_peers.iter().any(|p| **p == peer) {
+            println!("DEBUG: Peer {} is not connected, attempting to dial", peer);
+            // Try to find addresses for this peer
+            if let Some(peer_info) = self.discovered_peers.get(&peer) {
+                println!("DEBUG: Found {} addresses for peer {}", peer_info.addresses.len(), peer);
+                for addr in &peer_info.addresses {
+                    println!("DEBUG: Attempting to dial {} at {}", peer, addr);
+                    if let Err(e) = self.swarm.dial(addr.clone()) {
+                        println!("DEBUG: Failed to dial {} at {}: {:?}", peer, addr, e);
+                    } else {
+                        println!("DEBUG: Dialing {} at {} initiated", peer, addr);
+                    }
+                }
+            } else {
+                println!("DEBUG: No addresses found for peer {}", peer);
+            }
+            
+            // Wait a bit for connection to establish
+            for _ in 0..50 {
+                let current_peers = self.swarm.connected_peers().collect::<Vec<_>>();
+                if current_peers.iter().any(|p| **p == peer) {
+                    println!("DEBUG: Successfully connected to peer {}", peer);
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }
+        
+        // Ensure we're connected before sending request
+        if !self.swarm.is_connected(&peer) {
+            println!("DEBUG: Not connected to peer {}, cannot send commit request", peer);
+            return Ok(vec![]);
+        }
+        
+        let request_id = self.swarm.behaviour_mut().commit_response.send_request(
+            &peer,
+            CommitRequest { commit_hash },
+        );
+        
+        println!("DEBUG: Sent commit request to peer {}, request_id={:?}", peer, request_id);
+        
+        // Wait for response
+        use futures::StreamExt;
+        while let Some(event) = self.swarm.next().await {
+            match event {
+                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                    libp2p::request_response::Event::Message { 
+                        peer: _response_peer, 
+                        message 
+                    }
+                )) => {
+                    match message {
+                        libp2p::request_response::Message::Response { 
+                            request_id: response_id, 
+                            response 
+                        } if response_id == request_id => {
+                            println!("DEBUG: Received matching commit response for request {:?}: {} commits", 
+                                response_id, response.commits.len());
+                            return Ok(response.commits);
+                        }
+                        libp2p::request_response::Message::Response { 
+                            request_id: response_id, 
+                            response 
+                        } => {
+                            println!("DEBUG: Received non-matching commit response for request {:?}: {} commits", response_id, response.commits.len());
+                        }
+                        _ => {}
+                    }
+                }
+                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                    libp2p::request_response::Event::OutboundFailure { 
+                        request_id: response_id, 
+                        peer: _, 
+                        error 
+                    }
+                )) if response_id == request_id => {
+                    println!("Commit request failed (error: {:?})", error);
+                    return Ok(vec![]);
+                }
+                SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
+                    for (peer_id, addr) in list {
+                        println!("Discovered peer {} at {}", peer_id, addr);
+                        self.swarm.dial(addr)?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        Ok(vec![])
     }
 }
