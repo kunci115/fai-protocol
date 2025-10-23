@@ -522,7 +522,7 @@ impl StorageManager {
                 hash,
                 message,
                 timestamp,
-                file_hashes: file_hashes?,
+                file_hashes,
             }))
         } else {
             Ok(None)
