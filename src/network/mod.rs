@@ -119,7 +119,11 @@ impl NetworkManager {
 
         // Create behaviour with mDNS and chunk/commit request/response
         let behaviour = FAIBehaviour {
-            mdns: mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)?,
+            mdns: mdns::tokio::Behaviour::new(mdns::Config {
+                query_interval: std::time::Duration::from_secs(5),
+                ttl: std::time::Duration::from_secs(60),
+                ..Default::default()
+            }, local_peer_id)?,
             request_response: libp2p::request_response::cbor::Behaviour::new(
                 [(libp2p::StreamProtocol::new("/fai/chunk/1.0.0"), ProtocolSupport::Full)],
                 libp2p::request_response::Config::default(),
@@ -220,9 +224,13 @@ impl NetworkManager {
 
                             peer_info.last_seen = SystemTime::now();
 
-                            // Try to dial the peer
-                            if let Err(e) = self.swarm.dial(addr) {
-                                eprintln!("Failed to dial peer {}: {}", peer_id, e);
+                            // Try to dial the peer with retry logic
+                            if !self.swarm.is_connected(&peer_id) {
+                                println!("Attempting to connect to discovered peer {}", peer_id);
+                                if let Err(e) = self.swarm.dial(addr.clone()) {
+                                    eprintln!("Failed to dial peer {} at {}: {}", peer_id, addr, e);
+                                    // Don't remove peer from discovered list - might succeed later
+                                }
                             }
                         }
                     }
@@ -412,6 +420,52 @@ impl NetworkManager {
     pub fn connect_to_peer(&mut self, addr: Multiaddr) -> Result<()> {
         println!("Attempting to connect to {}", addr);
         self.swarm.dial(addr)?;
+        Ok(())
+    }
+
+    /// Add a peer to the discovered peers list manually
+    ///
+    /// # Arguments
+    /// * `peer_id` - The peer ID
+    /// * `addr` - The multiaddress of the peer
+    ///
+    /// # Returns
+    /// Ok(()) if peer added successfully
+    pub fn add_peer_manually(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<()> {
+        println!("Manually adding peer {} at {}", peer_id, addr);
+        
+        let peer_info = self.discovered_peers.entry(peer_id).or_insert_with(|| PeerInfo {
+            peer_id,
+            addresses: Vec::new(),
+            last_seen: SystemTime::now(),
+        });
+
+        if !peer_info.addresses.contains(&addr) {
+            peer_info.addresses.push(addr.clone());
+        }
+
+        peer_info.last_seen = SystemTime::now();
+
+        // Attempt to connect immediately
+        self.connect_to_peer(addr)
+    }
+
+    /// Connect to multiple known peers (useful for testing)
+    ///
+    /// # Arguments
+    /// * `peer_addrs` - List of (peer_id, address) tuples to connect to
+    ///
+    /// # Returns
+    /// Ok(()) if all connections initiated successfully
+    pub fn connect_to_known_peers(&mut self, peer_addrs: Vec<(PeerId, Multiaddr)>) -> Result<()> {
+        println!("Connecting to {} known peers", peer_addrs.len());
+        
+        for (peer_id, addr) in peer_addrs {
+            if let Err(e) = self.add_peer_manually(peer_id, addr) {
+                eprintln!("Failed to add peer {}: {}", peer_id, e);
+            }
+        }
+        
         Ok(())
     }
 
