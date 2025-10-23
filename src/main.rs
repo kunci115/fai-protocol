@@ -917,7 +917,7 @@ async fn main() -> Result<()> {
             
             if !removed.is_empty() {
                 println!("\n❌ Removed files ({}):", removed.len());
-                for file_hash in removed {
+                for file_hash in &removed {
                     // Try to get file size
                     if let Ok(data) = storage.retrieve(file_hash) {
                         println!("  - {} ({} bytes)", &file_hash[..8], data.len());
@@ -929,7 +929,7 @@ async fn main() -> Result<()> {
             
             if !added.is_empty() {
                 println!("\n✅ Added files ({}):", added.len());
-                for file_hash in added {
+                for file_hash in &added {
                     // Try to get file size
                     if let Ok(data) = storage.retrieve(file_hash) {
                         println!("  + {} ({} bytes)", &file_hash[..8], data.len());
