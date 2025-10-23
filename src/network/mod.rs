@@ -626,54 +626,70 @@ impl NetworkManager {
         
         println!("DEBUG: Sent commit request to peer {}, request_id={:?}", peer, request_id);
         
-        // Wait for response
+        // Wait for response with timeout
         use futures::StreamExt;
-        while let Some(event) = self.swarm.next().await {
-            match event {
-                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
-                    libp2p::request_response::Event::Message { 
-                        peer: _response_peer, 
-                        message 
-                    }
-                )) => {
-                    match message {
-                        libp2p::request_response::Message::Response { 
-                            request_id: response_id, 
-                            response 
-                        } if response_id == request_id => {
-                            println!("DEBUG: Received matching commit response for request {:?}: {} commits", 
-                                response_id, response.commits.len());
-                            return Ok(response.commits);
+        let timeout_duration = std::time::Duration::from_secs(20);
+        let start_time = std::time::Instant::now();
+        
+        while start_time.elapsed() < timeout_duration {
+            tokio::select! {
+                event = self.swarm.next() => {
+                    if let Some(event) = event {
+                        match event {
+                            SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                                libp2p::request_response::Event::Message { 
+                                    peer: _response_peer, 
+                                    message 
+                                }
+                            )) => {
+                                match message {
+                                    libp2p::request_response::Message::Response { 
+                                        request_id: response_id, 
+                                        response 
+                                    } if response_id == request_id => {
+                                        println!("DEBUG: Received matching commit response for request {:?}: {} commits", 
+                                            response_id, response.commits.len());
+                                        return Ok(response.commits);
+                                    }
+                                    libp2p::request_response::Message::Response { 
+                                        request_id: response_id, 
+                                        response 
+                                    } => {
+                                        println!("DEBUG: Received non-matching commit response for request {:?}: {} commits", response_id, response.commits.len());
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            SwarmEvent::Behaviour(FAIEvent::CommitResponse(
+                                libp2p::request_response::Event::OutboundFailure { 
+                                    request_id: response_id, 
+                                    peer: _, 
+                                    error 
+                                }
+                            )) if response_id == request_id => {
+                                println!("Commit request failed (error: {:?})", error);
+                                return Ok(vec![]);
+                            }
+                            SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
+                                for (peer_id, addr) in list {
+                                    println!("Discovered peer {} at {}", peer_id, addr);
+                                    let _ = self.swarm.dial(addr);
+                                }
+                            }
+                            _ => {}
                         }
-                        libp2p::request_response::Message::Response { 
-                            request_id: response_id, 
-                            response 
-                        } => {
-                            println!("DEBUG: Received non-matching commit response for request {:?}: {} commits", response_id, response.commits.len());
-                        }
-                        _ => {}
+                    } else {
+                        println!("DEBUG: Event stream ended unexpectedly");
+                        break;
                     }
                 }
-                SwarmEvent::Behaviour(FAIEvent::CommitResponse(
-                    libp2p::request_response::Event::OutboundFailure { 
-                        request_id: response_id, 
-                        peer: _, 
-                        error 
-                    }
-                )) if response_id == request_id => {
-                    println!("Commit request failed (error: {:?})", error);
-                    return Ok(vec![]);
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                    // Continue loop
                 }
-                SwarmEvent::Behaviour(FAIEvent::Mdns(mdns::Event::Discovered(list))) => {
-                    for (peer_id, addr) in list {
-                        println!("Discovered peer {} at {}", peer_id, addr);
-                        self.swarm.dial(addr)?;
-                    }
-                }
-                _ => {}
             }
         }
         
+        println!("DEBUG: Commit request timed out after {} seconds", timeout_duration.as_secs());
         Ok(vec![])
     }
 }
