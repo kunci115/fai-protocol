@@ -33,7 +33,7 @@ cleanup() {
     echo -e "${YELLOW}Cleaning up...${NC}"
     killall fai 2>/dev/null || true
     sleep 1
-    rm -rf repo1 repo2 repo3 test_*.txt serve1.log serve2.log
+    rm -rf repo1 repo2 repo3 test_*.txt serve1.log serve2.log .fai
     echo -e "${GREEN}Cleanup complete${NC}"
 }
 
@@ -89,9 +89,12 @@ check_commit() {
 echo -e "${YELLOW}=== STEP 1: Setup Repositories ===${NC}"
 mkdir -p repo1 repo2
 
+# Clean up any existing .fai directories first
+rm -rf repo1/.fai repo2/.fai repo3/.fai .fai 2>/dev/null || true
+
 cd repo1
 print_info "Initializing repo1..."
-if cargo run -- init > /dev/null 2>&1; then
+if cargo run -- init 2>&1; then
     print_status "Repo1 initialized"
 else
     print_error "Failed to initialize repo1"
