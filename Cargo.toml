@@ -3,12 +3,18 @@ name = "fai-protocol"
 version = "0.1.0"
 edition = "2021"
 authors = ["FAI Protocol Team"]
-description = "A decentralized version control system for AI models"
+description = "A decentralized version control system for AI models and large files"
 license = "MIT"
 repository = "https://github.com/fai-protocol/fai-protocol"
+homepage = "https://github.com/fai-protocol/fai-protocol"
+documentation = "https://docs.rs/fai-protocol"
+keywords = ["version-control", "distributed", "p2p", "ai", "models"]
+categories = ["development-tools", "network-programming"]
+readme = "README.md"
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "4.4", features = ["derive", "cargo"] }
+clap_complete = "4.5"
 blake3 = "1.5"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

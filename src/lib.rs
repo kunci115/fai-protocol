@@ -1,15 +1,15 @@
 //! FAI Protocol - Decentralized version control system for AI models
-//! 
+//!
 //! This library provides the core functionality for managing AI model versions
 //! in a decentralized manner.
 
-pub mod storage;
 pub mod database;
 pub mod network;
+pub mod storage;
 
-use std::path::PathBuf;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use std::path::PathBuf;
 
 /// Information about a commit for display purposes
 #[derive(Debug, Clone)]
@@ -37,26 +37,30 @@ impl FaiProtocol {
         let fai_path = PathBuf::from(".fai");
         let storage = storage::StorageManager::new(fai_path.clone())?;
         let database = database::DatabaseManager::new(&fai_path.join("db.sqlite"))?;
-        Ok(Self { storage, database, fai_path })
+        Ok(Self {
+            storage,
+            database,
+            fai_path,
+        })
     }
 
     /// Initialize a new FAI repository
     pub fn init() -> Result<()> {
         let fai_path = PathBuf::from(".fai");
-        
+
         // Create .fai directory structure
         std::fs::create_dir_all(&fai_path)?;
         std::fs::create_dir_all(fai_path.join("objects"))?;
-        
+
         // Initialize storage (creates metadata database)
         let _storage = storage::StorageManager::new(fai_path.clone())?;
-        
+
         // Initialize main database
         let _database = database::DatabaseManager::new(&fai_path.join("db.sqlite"))?;
-        
+
         // Create .fai/HEAD file pointing to main branch
         std::fs::write(fai_path.join("HEAD"), "ref: refs/heads/main")?;
-        
+
         Ok(())
     }
 
@@ -69,25 +73,37 @@ impl FaiProtocol {
 
         // Read file content
         let content = std::fs::read(file_path)?;
-        println!("DEBUG: Read {} bytes from file: {}", content.len(), file_path);
-        
+        println!(
+            "DEBUG: Read {} bytes from file: {}",
+            content.len(),
+            file_path
+        );
+
         // Store in storage manager FIRST (this actually writes to .fai/objects/)
         let hash = self.storage.store(&content)?;
-        println!("DEBUG: Stored file content with hash: {} ({} bytes)", hash, content.len());
-        
+        println!(
+            "DEBUG: Stored file content with hash: {} ({} bytes)",
+            hash,
+            content.len()
+        );
+
         // Get file size
         let size = std::fs::metadata(file_path)?.len();
-        
+
         // THEN add to staging area with the hash returned by storage
         self.database.add_to_staging(file_path, &hash, size)?;
         println!("DEBUG: Added file to staging: {} -> {}", file_path, hash);
-        
+
         // Debug: verify the file was actually stored
         if !self.storage.exists(&hash) {
-            return Err(anyhow::anyhow!("Failed to store file: {} with hash: {}", file_path, hash));
+            return Err(anyhow::anyhow!(
+                "Failed to store file: {} with hash: {}",
+                file_path,
+                hash
+            ));
         }
         println!("DEBUG: Verified file exists in storage: {}", hash);
-        
+
         Ok(hash)
     }
 
@@ -110,16 +126,17 @@ impl FaiProtocol {
     pub fn commit(&self, message: &str) -> Result<String> {
         // Get staged files
         let staged_files = self.database.get_staged_files()?;
-        
+
         if staged_files.is_empty() {
             return Err(anyhow::anyhow!("Nothing to commit"));
         }
 
         // Read current HEAD
         let parent_hash = self.get_head()?;
-        
+
         // Generate commit hash
-        let commit_data = format!("{}{}{:?}", 
+        let commit_data = format!(
+            "{}{}{:?}",
             Utc::now().timestamp_millis(),
             message,
             staged_files
@@ -129,7 +146,12 @@ impl FaiProtocol {
         let commit_hash = hasher.finalize().to_hex().to_string();
 
         // Create commit in database
-        self.database.create_commit(&commit_hash, message, parent_hash.as_deref(), &staged_files)?;
+        self.database.create_commit(
+            &commit_hash,
+            message,
+            parent_hash.as_deref(),
+            &staged_files,
+        )?;
 
         // Update HEAD file
         std::fs::write(self.fai_path.join("HEAD"), &commit_hash)?;
@@ -143,12 +165,15 @@ impl FaiProtocol {
     /// Get commit log
     pub fn get_log(&self) -> Result<Vec<CommitInfo>> {
         let commits = self.database.get_commit_history(None)?;
-        Ok(commits.into_iter().map(|c| CommitInfo {
-            hash: c.hash,
-            message: c.message,
-            timestamp: c.timestamp,
-            parent_hash: c.parent_hash,
-        }).collect())
+        Ok(commits
+            .into_iter()
+            .map(|c| CommitInfo {
+                hash: c.hash,
+                message: c.message,
+                timestamp: c.timestamp,
+                parent_hash: c.parent_hash,
+            })
+            .collect())
     }
 
     /// Read current HEAD commit hash
@@ -169,6 +194,6 @@ impl FaiProtocol {
     }
 }
 
+pub use database::{Commit, DatabaseManager};
 /// Re-export commonly used types
 pub use storage::{ModelMetadata, StorageManager};
-pub use database::{DatabaseManager, Commit};
