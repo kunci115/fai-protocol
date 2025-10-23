@@ -1,7 +1,9 @@
-//! FAI Protocol - Decentralized version control system for AI models
+//! FAI Protocol - Distributed version control system for large files
 //!
-//! This library provides the core functionality for managing AI model versions
-//! in a decentralized manner.
+//! This library provides the core functionality for managing large file versions
+//! in a decentralized manner. Perfect for game assets, video footage, scientific
+//! datasets, AI models, and any files that are too large for traditional version
+//! control systems.
 
 pub mod database;
 pub mod network;

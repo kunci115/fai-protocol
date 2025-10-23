@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 #[derive(Parser)]
 #[command(name = "fai")]
-#[command(about = "FAI Protocol - Decentralized version control for AI models")]
+#[command(about = "FAI Protocol - Distributed version control for large files")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
