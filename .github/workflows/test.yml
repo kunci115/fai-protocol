@@ -3,7 +3,7 @@ name: 🧪 Test Suite
 on:
   push:
     branches: [ main, develop ]
-  paths-ignore:
+    paths-ignore:
       - '**/target'
       - '**/*.rs.bk'
       - '**/Cargo.lock'
