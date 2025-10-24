@@ -12,43 +12,24 @@ use tempfile::TempDir;
 fn test_basic_repository_workflow() {
     // Store current directory to return later
     let original_dir = std::env::current_dir().unwrap();
+    let fai_binary = original_dir.join("target/debug/fai");
+
+    if !fai_binary.exists() {
+        panic!("FAI binary not found. Run `cargo build` first.");
+    }
 
     // Create a temporary directory for testing
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path();
 
-    // Change to the test directory
-    std::env::set_current_dir(repo_path).unwrap();
-
-    // Copy the FAI project files so cargo can find it
-    let project_root = original_dir.join("target/debug");
-    if project_root.exists() {
-        // Create a minimal Cargo.toml for testing
-        std::fs::write(repo_path.join("Cargo.toml"), r#"
-[package]
-name = "fai-test"
-version = "0.1.0"
-edition = "2021"
-
-[[bin]]
-name = "fai"
-path = "../src/main.rs"
-"#).unwrap();
-    }
-
     // Test 1: Initialize repository
-    let fai_binary = original_dir.join("target/debug/fai");
-    if fai_binary.exists() {
-        let init_output = Command::new(fai_binary.to_str().unwrap())
-            .args(&["init"])
-            .output()
-            .expect("Failed to execute init command");
+    let init_output = Command::new(&fai_binary)
+        .args(&["init"])
+        .current_dir(repo_path)
+        .output()
+        .expect("Failed to execute init command");
 
-        assert!(init_output.status.success(), "Init command should succeed");
-        assert!(repo_path.join(".fai").exists(), "FAI directory should be created");
-    } else {
-        panic!("FAI binary not built. Run `cargo build` first.");
-    }
+    assert!(init_output.status.success(), "Init command should succeed: {}", String::from_utf8_lossy(&init_output.stderr));
     assert!(repo_path.join(".fai").exists(), "FAI directory should be created");
 
     // Test 2: Create a test file
@@ -56,36 +37,40 @@ path = "../src/main.rs"
     fs::write(&test_file, "test content").expect("Failed to write test file");
 
     // Test 3: Add the file
-    let add_output = Command::new(&fai_binary.to_string_lossy())
+    let add_output = Command::new(&fai_binary)
         .args(&["add", "test.txt"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute add command");
 
-    assert!(add_output.status.success(), "Add command should succeed");
+    assert!(add_output.status.success(), "Add command should succeed: {}", String::from_utf8_lossy(&add_output.stderr));
 
     // Test 4: Commit the file
-    let commit_output = Command::new(&fai_binary.to_string_lossy())
+    let commit_output = Command::new(&fai_binary)
         .args(&["commit", "--message", "Integration test commit"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute commit command");
 
-    assert!(commit_output.status.success(), "Commit command should succeed");
+    assert!(commit_output.status.success(), "Commit command should succeed: {}", String::from_utf8_lossy(&commit_output.stderr));
 
     // Test 5: Check status
-    let status_output = Command::new(&fai_binary.to_string_lossy())
+    let status_output = Command::new(&fai_binary)
         .args(&["status"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute status command");
 
-    assert!(status_output.status.success(), "Status command should succeed");
+    assert!(status_output.status.success(), "Status command should succeed: {}", String::from_utf8_lossy(&status_output.stderr));
 
     // Test 6: Check log
-    let log_output = Command::new(&fai_binary.to_string_lossy())
+    let log_output = Command::new(&fai_binary)
         .args(&["log"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute log command");
 
-    assert!(log_output.status.success(), "Log command should succeed");
+    assert!(log_output.status.success(), "Log command should succeed: {}", String::from_utf8_lossy(&log_output.stderr));
 
     // Verify objects directory contains files
     let objects_dir = repo_path.join(".fai/objects");
@@ -95,20 +80,26 @@ path = "../src/main.rs"
 /// Test data integrity and file operations
 #[test]
 fn test_data_integrity() {
+    // Store current directory and find binary
+    let original_dir = std::env::current_dir().unwrap();
+    let fai_binary = original_dir.join("target/debug/fai");
+
+    if !fai_binary.exists() {
+        panic!("FAI binary not found. Run `cargo build` first.");
+    }
+
     // Create a temporary directory for testing
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path();
 
-    // Change to the test directory
-    std::env::set_current_dir(repo_path).unwrap();
-
     // Initialize repository
-    let init_output = Command::new("cargo")
-        .args(&["run", "--", "init"])
+    let init_output = Command::new(&fai_binary)
+        .args(&["init"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute init command");
 
-    assert!(init_output.status.success(), "Init command should succeed");
+    assert!(init_output.status.success(), "Init command should succeed: {}", String::from_utf8_lossy(&init_output.stderr));
 
     // Create test file with specific content
     let test_file = repo_path.join("integrity_test.txt");
@@ -116,20 +107,22 @@ fn test_data_integrity() {
     fs::write(&test_file, original_content).expect("Failed to write test file");
 
     // Add the file
-    let add_output = Command::new("cargo")
-        .args(&["run", "--", "add", "integrity_test.txt"])
+    let add_output = Command::new(&fai_binary)
+        .args(&["add", "integrity_test.txt"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute add command");
 
-    assert!(add_output.status.success(), "Add command should succeed");
+    assert!(add_output.status.success(), "Add command should succeed: {}", String::from_utf8_lossy(&add_output.stderr));
 
     // Commit the file
-    let commit_output = Command::new("cargo")
-        .args(&["run", "--", "commit", "--message", "Integrity test commit"])
+    let commit_output = Command::new(&fai_binary)
+        .args(&["commit", "--message", "Integrity test commit"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute commit command");
 
-    assert!(commit_output.status.success(), "Commit command should succeed");
+    assert!(commit_output.status.success(), "Commit command should succeed: {}", String::from_utf8_lossy(&commit_output.stderr));
 
     // Verify the file content is stored correctly
     let objects_dir = repo_path.join(".fai/objects");
@@ -143,16 +136,22 @@ fn test_data_integrity() {
 /// Test multiple file operations
 #[test]
 fn test_multiple_file_operations() {
+    // Store current directory and find binary
+    let original_dir = std::env::current_dir().unwrap();
+    let fai_binary = original_dir.join("target/debug/fai");
+
+    if !fai_binary.exists() {
+        panic!("FAI binary not found. Run `cargo build` first.");
+    }
+
     // Create a temporary directory for testing
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path();
 
-    // Change to the test directory
-    std::env::set_current_dir(repo_path).unwrap();
-
     // Initialize repository
-    Command::new("cargo")
-        .args(&["run", "--", "init"])
+    Command::new(&fai_binary)
+        .args(&["init"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute init command");
 
@@ -168,44 +167,53 @@ fn test_multiple_file_operations() {
         fs::write(&file_path, content).expect("Failed to write test file");
 
         // Add each file
-        let add_output = Command::new("cargo")
-            .args(&["run", "--", "add", filename])
+        let add_output = Command::new(&fai_binary)
+            .args(&["add", filename])
+            .current_dir(repo_path)
             .output()
             .expect("Failed to execute add command");
 
-        assert!(add_output.status.success(), "Add command should succeed for {}", filename);
+        assert!(add_output.status.success(), "Add command should succeed for {}: {}", filename, String::from_utf8_lossy(&add_output.stderr));
     }
 
     // Commit all files
-    let commit_output = Command::new("cargo")
-        .args(&["run", "--", "commit", "--message", "Multiple files commit"])
+    let commit_output = Command::new(&fai_binary)
+        .args(&["commit", "--message", "Multiple files commit"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute commit command");
 
-    assert!(commit_output.status.success(), "Commit command should succeed");
+    assert!(commit_output.status.success(), "Commit command should succeed: {}", String::from_utf8_lossy(&commit_output.stderr));
 
     // Verify all files are tracked
-    let status_output = Command::new("cargo")
-        .args(&["run", "--", "status"])
+    let status_output = Command::new(&fai_binary)
+        .args(&["status"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute status command");
 
-    assert!(status_output.status.success(), "Status command should succeed");
+    assert!(status_output.status.success(), "Status command should succeed: {}", String::from_utf8_lossy(&status_output.stderr));
 }
 
 /// Test error handling for invalid operations
 #[test]
 fn test_error_handling() {
+    // Store current directory and find binary
+    let original_dir = std::env::current_dir().unwrap();
+    let fai_binary = original_dir.join("target/debug/fai");
+
+    if !fai_binary.exists() {
+        panic!("FAI binary not found. Run `cargo build` first.");
+    }
+
     // Create a temporary directory for testing
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path();
 
-    // Change to the test directory
-    std::env::set_current_dir(repo_path).unwrap();
-
     // Try to add a file that doesn't exist (should fail gracefully)
-    let add_output = Command::new("cargo")
-        .args(&["run", "--", "add", "nonexistent.txt"])
+    let add_output = Command::new(&fai_binary)
+        .args(&["add", "nonexistent.txt"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute add command");
 
@@ -229,16 +237,22 @@ fn test_error_handling() {
 /// Test branch operations (basic functionality)
 #[test]
 fn test_branch_operations() {
+    // Store current directory and find binary
+    let original_dir = std::env::current_dir().unwrap();
+    let fai_binary = original_dir.join("target/debug/fai");
+
+    if !fai_binary.exists() {
+        panic!("FAI binary not found. Run `cargo build` first.");
+    }
+
     // Create a temporary directory for testing
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path();
 
-    // Change to the test directory
-    std::env::set_current_dir(repo_path).unwrap();
-
     // Initialize repository
-    Command::new("cargo")
-        .args(&["run", "--", "init"])
+    Command::new(&fai_binary)
+        .args(&["init"])
+        .current_dir(repo_path)
         .output()
         .expect("Failed to execute init command");
 
