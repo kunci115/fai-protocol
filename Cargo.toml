@@ -1,6 +1,6 @@
 [package]
 name = "fai-protocol"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = ["FAI Protocol Team"]
 description = "A decentralized version control system for AI models and large files"
