@@ -1,6 +1,6 @@
 [package]
 name = "fai-protocol"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 authors = ["FAI Protocol Team"]
 description = "A decentralized version control system for AI models and large files"
@@ -45,7 +45,17 @@ libp2p = { version = "0.54", features = ["tokio", "tcp", "mdns", "noise", "yamux
 futures = "0.3"
 async-trait = "0.1"
 
+# Encryption and security dependencies
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+ring = "0.17"
+
 [[bin]]
 name = "fai"
 path = "src/main.rs"
+
+[[test]]
+name = "integration_tests"
+path = "tests/integration_tests.rs"
 

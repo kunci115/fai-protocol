@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 
 /// Information about a commit for display purposes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CommitInfo {
     /// Commit hash
     pub hash: String,
@@ -150,7 +150,7 @@ impl FaiProtocol {
         let commit_hash = hasher.finalize().to_hex().to_string();
 
         // Create commit in database
-        let parents = match parent_hash.as_deref() {
+        let parents = match parent_hash {
             Some(p) => vec![p],
             None => vec![],
         };

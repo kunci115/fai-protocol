@@ -16,8 +16,10 @@ pub struct Commit {
     pub message: String,
     /// Commit timestamp
     pub timestamp: DateTime<Utc>,
-    /// Parent commit hash (None for initial commit)
-    pub parent_hash: Option<String>,
+    /// Parent commit hashes (empty for initial commit, multiple for merge commits)
+    pub parents: Vec<String>,
+    /// Whether this is a merge commit
+    pub is_merge: bool,
 }
 
 /// Database manager for FAI Protocol
@@ -59,8 +61,19 @@ impl DatabaseManager {
                 hash TEXT PRIMARY KEY,
                 message TEXT NOT NULL,
                 timestamp INTEGER NOT NULL,
-                parent_hash TEXT,
-                FOREIGN KEY (parent_hash) REFERENCES commits(hash)
+                is_merge BOOLEAN NOT NULL DEFAULT 0
+            )",
+            [],
+        )?;
+
+        // Create commit_parents table for multiple parents
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS commit_parents (
+                commit_hash TEXT NOT NULL,
+                parent_hash TEXT NOT NULL,
+                PRIMARY KEY (commit_hash, parent_hash),
+                FOREIGN KEY (commit_hash) REFERENCES commits(hash) ON DELETE CASCADE,
+                FOREIGN KEY (parent_hash) REFERENCES commits(hash) ON DELETE CASCADE
             )",
             [],
         )?;
@@ -135,14 +148,16 @@ impl DatabaseManager {
     /// # Arguments
     /// * `hash` - Commit hash
     /// * `message` - Commit message
-    /// * `parent` - Optional parent commit hash
+    /// * `parents` - List of parent commit hashes
     /// * `files` - List of files included in this commit
+    /// * `is_merge` - Whether this is a merge commit
     pub fn create_commit(
         &self,
         hash: &str,
         message: &str,
-        parent: Option<&str>,
+        parents: &[String],
         files: &[(String, String, u64)],
+        is_merge: bool,
     ) -> Result<()> {
         // Validate inputs
         if hash.is_empty() {
@@ -177,8 +192,8 @@ impl DatabaseManager {
 
         // Insert commit
         match self.conn.execute(
-            "INSERT INTO commits (hash, message, timestamp, parent_hash) VALUES (?1, ?2, ?3, ?4)",
-            params![hash, message, timestamp, parent],
+            "INSERT INTO commits (hash, message, timestamp, is_merge) VALUES (?1, ?2, ?3, ?4)",
+            params![hash, message, timestamp, is_merge],
         ) {
             Ok(rows) => {
                 println!(
@@ -189,6 +204,26 @@ impl DatabaseManager {
             Err(e) => {
                 println!("DEBUG: Failed to insert commit: {}", e);
                 return Err(anyhow::anyhow!("Failed to insert commit: {}", e));
+            }
+        }
+
+        // Insert parent relationships
+        for parent_hash in parents {
+            println!(
+                "DEBUG: Inserting parent relationship: {} -> {}",
+                hash, parent_hash
+            );
+            match self.conn.execute(
+                "INSERT INTO commit_parents (commit_hash, parent_hash) VALUES (?1, ?2)",
+                params![hash, parent_hash],
+            ) {
+                Ok(rows) => {
+                    println!("DEBUG: Successfully inserted parent relationship, rows affected: {}", rows);
+                }
+                Err(e) => {
+                    println!("DEBUG: Failed to insert parent relationship: {}", e);
+                    // Continue with other parents even if one fails
+                }
             }
         }
 
@@ -225,15 +260,29 @@ impl DatabaseManager {
     pub fn get_commit(&self, hash: &str) -> Result<Option<Commit>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT hash, message, timestamp, parent_hash FROM commits WHERE hash = ?1")?;
+            .prepare("SELECT hash, message, timestamp, is_merge FROM commits WHERE hash = ?1")?;
 
         let mut rows = stmt.query([hash])?;
         if let Some(row) = rows.next()? {
+            // Get parents from commit_parents table
+            let mut parent_stmt = self.conn.prepare(
+                "SELECT parent_hash FROM commit_parents WHERE commit_hash = ?1 ORDER BY parent_hash"
+            )?;
+            let parent_rows = parent_stmt.query_map([hash], |row| {
+                Ok(row.get::<_, String>(0)?)
+            })?;
+
+            let mut parents = Vec::new();
+            for parent in parent_rows {
+                parents.push(parent?);
+            }
+
             Ok(Some(Commit {
                 hash: row.get(0)?,
                 message: row.get(1)?,
                 timestamp: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
-                parent_hash: row.get(3)?,
+                parents,
+                is_merge: row.get(3)?,
             }))
         } else {
             Ok(None)
@@ -288,20 +337,36 @@ impl DatabaseManager {
     /// Vector of commits ordered by timestamp (newest first)
     pub fn get_commit_history(&self, limit: Option<i32>) -> Result<Vec<Commit>> {
         let query = if let Some(limit) = limit {
-            format!("SELECT hash, message, timestamp, parent_hash FROM commits ORDER BY timestamp DESC LIMIT {}", limit)
+            format!("SELECT hash, message, timestamp, is_merge FROM commits ORDER BY timestamp DESC LIMIT {}", limit)
         } else {
-            "SELECT hash, message, timestamp, parent_hash FROM commits ORDER BY timestamp DESC"
+            "SELECT hash, message, timestamp, is_merge FROM commits ORDER BY timestamp DESC"
                 .to_string()
         };
 
         let mut stmt = self.conn.prepare(&query)?;
 
         let rows = stmt.query_map([], |row| {
+            let commit_hash: String = row.get(0)?;
+
+            // Get parents for this commit
+            let mut parent_stmt = self.conn.prepare(
+                "SELECT parent_hash FROM commit_parents WHERE commit_hash = ?1 ORDER BY parent_hash"
+            )?;
+            let parent_rows = parent_stmt.query_map([&commit_hash], |parent_row| {
+                Ok(parent_row.get::<_, String>(0)?)
+            })?;
+
+            let mut parents = Vec::new();
+            for parent in parent_rows {
+                parents.push(parent?);
+            }
+
             Ok(Commit {
-                hash: row.get(0)?,
+                hash: commit_hash,
                 message: row.get(1)?,
                 timestamp: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
-                parent_hash: row.get(3)?,
+                parents,
+                is_merge: row.get(3)?,
             })
         })?;
 
@@ -356,7 +421,7 @@ mod tests {
             ("file1.txt".to_string(), "hash1".to_string(), 100),
             ("file2.txt".to_string(), "hash2".to_string(), 200),
         ];
-        db.create_commit("commit1", "Initial commit", None, &files)
+        db.create_commit("commit1", "Initial commit", &[], &files, false)
             .unwrap();
 
         // Test getting commit
@@ -365,7 +430,8 @@ mod tests {
         let commit = commit.unwrap();
         assert_eq!(commit.hash, "commit1");
         assert_eq!(commit.message, "Initial commit");
-        assert_eq!(commit.parent_hash, None);
+        assert_eq!(commit.parents, Vec::<String>::new());
+        assert_eq!(commit.is_merge, false);
 
         // Test getting commit files
         let commit_files = db.get_commit_files("commit1").unwrap();
@@ -384,7 +450,7 @@ mod tests {
             ("file1.txt".to_string(), "hash1_updated".to_string(), 150),
             ("file3.txt".to_string(), "hash3".to_string(), 300),
         ];
-        db.create_commit("commit2", "Second commit", Some("commit1"), &files2)
+        db.create_commit("commit2", "Second commit", &["commit1".to_string()], &files2, false)
             .unwrap();
 
         // Test HEAD updated

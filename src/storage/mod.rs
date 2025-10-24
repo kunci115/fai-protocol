@@ -5,6 +5,7 @@
 use anyhow::{anyhow, Result};
 pub use crate::CommitInfo;
 use blake3::Hasher;
+use chrono::DateTime;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -71,12 +72,25 @@ impl StorageManager {
             [],
         )?;
 
-        // Create commits table for version control
+        // Create commits table for version control (matching database module schema)
         db.execute(
             "CREATE TABLE IF NOT EXISTS commits (
                 hash TEXT PRIMARY KEY,
                 message TEXT NOT NULL,
-                timestamp INTEGER NOT NULL
+                timestamp INTEGER NOT NULL,
+                is_merge BOOLEAN NOT NULL DEFAULT 0
+            )",
+            [],
+        )?;
+
+        // Create commit_parents table for multiple parents
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS commit_parents (
+                commit_hash TEXT NOT NULL,
+                parent_hash TEXT NOT NULL,
+                PRIMARY KEY (commit_hash, parent_hash),
+                FOREIGN KEY (commit_hash) REFERENCES commits(hash) ON DELETE CASCADE,
+                FOREIGN KEY (parent_hash) REFERENCES commits(hash) ON DELETE CASCADE
             )",
             [],
         )?;
@@ -523,33 +537,39 @@ impl StorageManager {
         println!("DEBUG: Found {} commits in database", count);
 
         let mut stmt = conn.prepare(
-            "SELECT c.hash, c.message, c.timestamp 
-             FROM commits c 
+            "SELECT c.hash, c.message, c.timestamp, c.is_merge
+             FROM commits c
              ORDER BY c.timestamp DESC",
         )?;
 
         let commit_iter = stmt.query_map([], |row| {
+            let commit_hash: String = row.get(0)?;
+
+            // Get parents for this commit
+            let mut parent_stmt = conn.prepare(
+                "SELECT parent_hash FROM commit_parents WHERE commit_hash = ?1 ORDER BY parent_hash"
+            )?;
+            let parent_rows = parent_stmt.query_map([&commit_hash], |parent_row| {
+                Ok(parent_row.get::<_, String>(0)?)
+            })?;
+
+            let mut parents = Vec::new();
+            for parent in parent_rows {
+                parents.push(parent?);
+            }
+
             Ok(CommitInfo {
-                hash: row.get(0)?,
+                hash: commit_hash,
                 message: row.get(1)?,
-                timestamp: row.get(2)?,
-                file_hashes: Vec::new(), // Will be filled separately
+                timestamp: DateTime::from_timestamp_millis(row.get(2)?).unwrap_or_default(),
+                parents,
+                is_merge: row.get(3)?,
             })
         })?;
 
         let mut commits = Vec::new();
         for commit_result in commit_iter {
-            let mut commit = commit_result?;
-
-            // Get file hashes for this commit
-            let mut file_stmt =
-                conn.prepare("SELECT file_hash FROM commit_files WHERE commit_hash = ?")?;
-            let file_hashes: Result<Vec<String>, _> = file_stmt
-                .query_map([&commit.hash], |row| row.get(0))?
-                .collect();
-            commit.file_hashes = file_hashes?;
-
-            commits.push(commit);
+            commits.push(commit_result?);
         }
 
         Ok(commits)
@@ -567,29 +587,34 @@ impl StorageManager {
 
         // First get basic commit info
         let mut stmt =
-            conn.prepare("SELECT hash, message, timestamp FROM commits WHERE hash = ?1")?;
+            conn.prepare("SELECT hash, message, timestamp, is_merge FROM commits WHERE hash = ?1")?;
 
         let mut rows = stmt.query([hash])?;
         if let Some(row) = rows.next()? {
-            let hash: String = row.get(0)?;
+            let commit_hash: String = row.get(0)?;
             let message: String = row.get(1)?;
             let timestamp: i64 = row.get(2)?;
+            let is_merge: bool = row.get(3)?;
 
-            // Now get file hashes for this commit
-            let mut file_stmt =
-                conn.prepare("SELECT file_hash FROM commit_files WHERE commit_hash = ?1")?;
+            // Get parents for this commit
+            let mut parent_stmt = conn.prepare(
+                "SELECT parent_hash FROM commit_parents WHERE commit_hash = ?1 ORDER BY parent_hash"
+            )?;
+            let parent_rows = parent_stmt.query_map([&commit_hash], |parent_row| {
+                Ok(parent_row.get::<_, String>(0)?)
+            })?;
 
-            let mut file_rows = file_stmt.query([&hash])?;
-            let mut file_hashes = Vec::new();
-            while let Some(row) = file_rows.next()? {
-                file_hashes.push(row.get(0)?);
+            let mut parents = Vec::new();
+            for parent in parent_rows {
+                parents.push(parent?);
             }
 
             Ok(Some(CommitInfo {
-                hash: hash.clone(),
+                hash: commit_hash,
                 message,
-                timestamp,
-                file_hashes,
+                timestamp: DateTime::from_timestamp_millis(timestamp).unwrap_or_default(),
+                parents,
+                is_merge,
             }))
         } else {
             Ok(None)
@@ -611,15 +636,20 @@ impl StorageManager {
 
         // Insert commit (ignore if exists)
         tx.execute(
-            "INSERT OR IGNORE INTO commits (hash, message, timestamp) VALUES (?1, ?2, ?3)",
-            [&commit.hash, &commit.message, &commit.timestamp.to_string()],
+            "INSERT OR IGNORE INTO commits (hash, message, timestamp, is_merge) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                &commit.hash,
+                &commit.message,
+                &commit.timestamp.timestamp_millis(),
+                &commit.is_merge
+            ],
         )?;
 
-        // Insert file associations
-        for file_hash in &commit.file_hashes {
+        // Insert parent relationships
+        for parent_hash in &commit.parents {
             tx.execute(
-                "INSERT OR IGNORE INTO commit_files (commit_hash, file_hash) VALUES (?1, ?2)",
-                [&commit.hash, file_hash],
+                "INSERT OR IGNORE INTO commit_parents (commit_hash, parent_hash) VALUES (?1, ?2)",
+                rusqlite::params![&commit.hash, parent_hash],
             )?;
         }
 

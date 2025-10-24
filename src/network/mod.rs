@@ -5,7 +5,6 @@
 use crate::storage::StorageManager;
 use anyhow::Result;
 use futures::StreamExt;
-use crate::CommitInfo;
 use libp2p::{
     identity::Keypair,
     mdns,
@@ -352,21 +351,16 @@ impl NetworkManager {
                                 );
 
                                 // Get commits from database and convert to storage::CommitInfo
-                                let commits: Vec<crate::storage::CommitInfo> = if let Some(hash) = &request.commit_hash {
+                                let commits: Vec<crate::CommitInfo> = if let Some(hash) = &request.commit_hash {
                                     // Get specific commit
                                     match self.database.get_commit(hash) {
                                         Ok(Some(db_commit)) => {
-                                            // Get file hashes for this commit
-                                            let file_hashes = match self.database.get_commit_files(hash) {
-                                                Ok(files) => files.into_iter().map(|(_path, hash, _size)| hash).collect(),
-                                                Err(_) => vec![],
-                                            };
-
-                                            vec![crate::storage::CommitInfo {
+                                            vec![crate::CommitInfo {
                                                 hash: db_commit.hash,
                                                 message: db_commit.message,
-                                                timestamp: db_commit.timestamp.timestamp_millis(),
-                                                file_hashes,
+                                                timestamp: db_commit.timestamp,
+                                                parents: db_commit.parents,
+                                                is_merge: db_commit.is_merge,
                                             }]
                                         }
                                         Ok(None) => {
@@ -382,18 +376,14 @@ impl NetworkManager {
                                     // Get all commits
                                     match self.database.get_commit_history(None) {
                                         Ok(db_commits) => {
-                                            // Convert database::Commit to storage::CommitInfo
+                                            // Convert database::Commit to CommitInfo
                                             db_commits.into_iter().map(|db_commit| {
-                                                let file_hashes = match self.database.get_commit_files(&db_commit.hash) {
-                                                    Ok(files) => files.into_iter().map(|(_path, hash, _size)| hash).collect(),
-                                                    Err(_) => vec![],
-                                                };
-
-                                                crate::storage::CommitInfo {
+                                                crate::CommitInfo {
                                                     hash: db_commit.hash,
                                                     message: db_commit.message,
-                                                    timestamp: db_commit.timestamp.timestamp_millis(),
-                                                    file_hashes,
+                                                    timestamp: db_commit.timestamp,
+                                                    parents: db_commit.parents,
+                                                    is_merge: db_commit.is_merge,
                                                 }
                                             }).collect()
                                         },
@@ -886,22 +876,21 @@ impl NetworkManager {
 
                 // Store commits locally
                 for commit in commits {
-                    // Convert timestamp to DateTime<Utc>
-                    let _timestamp = chrono::DateTime::from_timestamp(commit.timestamp / 1000, 0)
-                        .unwrap_or_else(|| chrono::Utc::now());
+                    // Use the timestamp from CommitInfo directly (it's already DateTime<Utc>)
+                    let _timestamp = commit.timestamp;
 
-                    // For create_commit, we need (hash, message, parent, files)
-                    // CommitInfo doesn't have parent_hash, so we'll use None for now
-                    // In the future, this should be properly tracked
-                    let files: Vec<(String, String, u64)> = commit.file_hashes.iter()
-                        .enumerate()
-                        .map(|(i, hash)| (format!("file_{}", i), hash.clone(), 0))
-                        .collect();
+                    // For create_commit, we need (hash, message, parents, files)
+                    // Since CommitInfo doesn't include file information, we need to get it separately
+                    let files = if let Ok(db_files) = self.database.get_commit_files(&commit.hash) {
+                        db_files
+                    } else {
+                        vec![] // Empty file list if we can't get files
+                    };
 
                     if let Err(e) = self.database.create_commit(
                         &commit.hash,
                         &commit.message,
-                        &[], // No parent info available in CommitInfo
+                        &commit.parents, // Use parents from CommitInfo
                         &files,
                         commit.is_merge // Use is_merge flag from commit
                     ) {
