@@ -3,6 +3,7 @@
 //! Handles content-addressed storage of AI models and metadata management.
 
 use anyhow::{anyhow, Result};
+pub use crate::CommitInfo;
 use blake3::Hasher;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -39,21 +40,6 @@ pub struct ModelMetadata {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Information about a commit for P2P transfer
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CommitInfo {
-    /// Commit hash
-    pub hash: String,
-    /// Commit message
-    pub message: String,
-    /// Timestamp as Unix epoch
-    pub timestamp: i64,
-    /// List of file hashes included in this commit
-    pub file_hashes: Vec<String>,
-    /// Whether this is a merge commit
-    #[serde(default)]
-    pub is_merge: bool,
-}
 
 /// Storage manager for AI models
 #[derive(Clone)]

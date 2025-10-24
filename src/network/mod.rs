@@ -5,6 +5,7 @@
 use crate::storage::StorageManager;
 use anyhow::Result;
 use futures::StreamExt;
+use crate::CommitInfo;
 use libp2p::{
     identity::Keypair,
     mdns,

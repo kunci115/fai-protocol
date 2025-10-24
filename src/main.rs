@@ -92,19 +92,44 @@ async fn main() -> Result<()> {
 
             match shell {
                 clap_complete::Shell::Bash => {
-                    clap_complete::generate(clap_complete::shells::Bash, &mut cmd, name, &mut io::stdout());
+                    clap_complete::generate(
+                        clap_complete::shells::Bash,
+                        &mut cmd,
+                        name,
+                        &mut io::stdout(),
+                    );
                 }
                 clap_complete::Shell::Fish => {
-                    clap_complete::generate(clap_complete::shells::Fish, &mut cmd, name, &mut io::stdout());
+                    clap_complete::generate(
+                        clap_complete::shells::Fish,
+                        &mut cmd,
+                        name,
+                        &mut io::stdout(),
+                    );
                 }
                 clap_complete::Shell::Zsh => {
-                    clap_complete::generate(clap_complete::shells::Zsh, &mut cmd, name, &mut io::stdout());
+                    clap_complete::generate(
+                        clap_complete::shells::Zsh,
+                        &mut cmd,
+                        name,
+                        &mut io::stdout(),
+                    );
                 }
                 clap_complete::Shell::PowerShell => {
-                    clap_complete::generate(clap_complete::shells::PowerShell, &mut cmd, name, &mut io::stdout());
+                    clap_complete::generate(
+                        clap_complete::shells::PowerShell,
+                        &mut cmd,
+                        name,
+                        &mut io::stdout(),
+                    );
                 }
                 clap_complete::Shell::Elvish => {
-                    clap_complete::generate(clap_complete::shells::Elvish, &mut cmd, name, &mut io::stdout());
+                    clap_complete::generate(
+                        clap_complete::shells::Elvish,
+                        &mut cmd,
+                        name,
+                        &mut io::stdout(),
+                    );
                 }
                 _ => {
                     eprintln!("Shell not supported for completion generation");
@@ -293,17 +318,17 @@ async fn main() -> Result<()> {
             )?);
 
             // Create database manager
-            let database = fai_protocol::database::DatabaseManager::new(
-                &Path::new(".fai").join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&Path::new(".fai").join("db.sqlite"))?;
 
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone(), database) {
-                Ok(nm) => nm,
-                Err(e) => {
-                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
-                }
-            };
+            let mut network_manager =
+                match fai_protocol::network::NetworkManager::new(storage.clone(), database) {
+                    Ok(nm) => nm,
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                    }
+                };
 
             // Start the network manager
             if let Err(e) = network_manager.start().await {
@@ -376,9 +401,8 @@ async fn main() -> Result<()> {
             )?);
 
             // Create database manager
-            let database = fai_protocol::database::DatabaseManager::new(
-                &Path::new(".fai").join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&Path::new(".fai").join("db.sqlite"))?;
 
             // Create network manager (single threaded for now to avoid complex async issues)
             let mut network_manager =
@@ -721,9 +745,8 @@ async fn main() -> Result<()> {
             println!("DEBUG: Storage manager created");
 
             // Create database manager
-            let database = fai_protocol::database::DatabaseManager::new(
-                &Path::new(".fai").join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&Path::new(".fai").join("db.sqlite"))?;
             println!("DEBUG: Database manager created");
 
             // Create network manager
@@ -873,9 +896,8 @@ async fn main() -> Result<()> {
             )?);
 
             // Create database manager
-            let database = fai_protocol::database::DatabaseManager::new(
-                &Path::new(".fai").join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&Path::new(".fai").join("db.sqlite"))?;
 
             // Create network manager
             let mut network_manager =
@@ -1031,9 +1053,8 @@ async fn main() -> Result<()> {
             )?);
 
             // Create database manager
-            let database = fai_protocol::database::DatabaseManager::new(
-                &fai_path.join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&fai_path.join("db.sqlite"))?;
 
             // Initialize network
             let mut network_manager =
@@ -1177,9 +1198,8 @@ async fn main() -> Result<()> {
             // Create storage and database managers
             let storage =
                 fai_protocol::storage::StorageManager::new(Path::new(".fai").to_path_buf())?;
-            let database = fai_protocol::database::DatabaseManager::new(
-                &Path::new(".fai").join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&Path::new(".fai").join("db.sqlite"))?;
 
             // Get both commits from database (try short hash matching if full hash not found)
             let db_commit1 = if let Some(commit) = database.get_commit(&hash1)? {
@@ -1187,13 +1207,18 @@ async fn main() -> Result<()> {
             } else {
                 // Try to find commit by short hash prefix
                 let commits = database.get_commit_history(None)?;
-                let matching_commits: Vec<_> = commits.iter()
+                let matching_commits: Vec<_> = commits
+                    .iter()
                     .filter(|c| c.hash.starts_with(&hash1))
                     .collect();
                 if matching_commits.len() == 1 {
                     matching_commits[0].clone()
                 } else {
-                    return Err(anyhow::anyhow!("Commit not found: {} (found {} matches)", hash1, matching_commits.len()));
+                    return Err(anyhow::anyhow!(
+                        "Commit not found: {} (found {} matches)",
+                        hash1,
+                        matching_commits.len()
+                    ));
                 }
             };
 
@@ -1202,13 +1227,18 @@ async fn main() -> Result<()> {
             } else {
                 // Try to find commit by short hash prefix
                 let commits = database.get_commit_history(None)?;
-                let matching_commits: Vec<_> = commits.iter()
+                let matching_commits: Vec<_> = commits
+                    .iter()
                     .filter(|c| c.hash.starts_with(&hash2))
                     .collect();
                 if matching_commits.len() == 1 {
                     matching_commits[0].clone()
                 } else {
-                    return Err(anyhow::anyhow!("Commit not found: {} (found {} matches)", hash2, matching_commits.len()));
+                    return Err(anyhow::anyhow!(
+                        "Commit not found: {} (found {} matches)",
+                        hash2,
+                        matching_commits.len()
+                    ));
                 }
             };
 
@@ -1236,12 +1266,10 @@ async fn main() -> Result<()> {
             println!("=== Changes ===");
 
             // Convert to HashSets for comparison (use only file hashes)
-            let files1_hashes: std::collections::HashSet<_> = files1.iter()
-                .map(|(_, hash, _)| hash)
-                .collect();
-            let files2_hashes: std::collections::HashSet<_> = files2.iter()
-                .map(|(_, hash, _)| hash)
-                .collect();
+            let files1_hashes: std::collections::HashSet<_> =
+                files1.iter().map(|(_, hash, _)| hash).collect();
+            let files2_hashes: std::collections::HashSet<_> =
+                files2.iter().map(|(_, hash, _)| hash).collect();
 
             // Files only in commit1 (removed in commit2)
             let removed: Vec<_> = files1_hashes.difference(&files2_hashes).collect();
@@ -1338,17 +1366,17 @@ async fn main() -> Result<()> {
             )?);
 
             // Create database manager
-            let database = fai_protocol::database::DatabaseManager::new(
-                &Path::new(".fai").join("db.sqlite")
-            )?;
+            let database =
+                fai_protocol::database::DatabaseManager::new(&Path::new(".fai").join("db.sqlite"))?;
 
             // Create network manager
-            let mut network_manager = match fai_protocol::network::NetworkManager::new(storage.clone(), database) {
-                Ok(nm) => nm,
-                Err(e) => {
-                    return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
-                }
-            };
+            let mut network_manager =
+                match fai_protocol::network::NetworkManager::new(storage.clone(), database) {
+                    Ok(nm) => nm,
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Failed to create network manager: {}", e));
+                    }
+                };
 
             // Start the network manager
             if let Err(e) = network_manager.start().await {
