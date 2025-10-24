@@ -434,19 +434,36 @@ Benefits:
 - [x] **Error handling** - Robust error recovery
 - [x] **Performance optimization** - Parallel transfers and chunking
 
-### 🚧 Phase 6: Enterprise features (In Progress)
+### 🚧 Phase 6: Version Control Features (Not Yet Implemented)
 - [ ] **Branching and merging** - Full Git-like branch support
-- [ ] **Access control** - Encryption and permissions
-- [ ] **Web interface** - Browser-based repository management
-- [ ] **Enhanced security** - User authentication and authorization
+  - Create branches: `fai branch feature-name`
+  - Switch branches: `fai checkout feature-name`
+  - Merge branches: `fai merge feature-name`
+  - List branches: `fai branch --list`
+- [ ] **Advanced commit operations**
+  - Amend commits: `fai commit --amend`
+  - Interactive rebase: `fai rebase -i`
+  - Cherry-pick commits: `fai cherry-pick <hash>`
 
-### ⏳ Phase 7: Global P2P (Future)
+### 🔒 Phase 7: Security & Access Control (Future)
+- [ ] **Access control** - Encryption and permissions
+- [ ] **User authentication** - Login and user management
+- [ ] **Repository permissions** - Read/write access control
+- [ ] **Encrypted storage** - Optional file encryption
+
+### 🌐 Phase 8: Web Interface (Future)
+- [ ] **Browser-based repository management**
+- [ ] **Web UI for common operations**
+- [ ] **REST API for external integrations**
+- [ ] **Real-time collaboration features**
+
+### ⏳ Phase 9: Global P2P (Future)
 - [ ] **DHT integration** - Global peer discovery without mDNS
 - [ ] **NAT traversal** - Work through firewalls and routers
 - [ ] **Relay nodes** - Help peers behind restrictive networks
 - [ ] **Mobile apps** - iOS/Android clients
 
-### 🔮 Phase 8: Advanced features (Future)
+### 🔮 Phase 10: Advanced features (Future)
 - [ ] **Plugin system** - Custom file analysis tools
 - [ ] **Cloud integration** - AWS, GCP, Azure storage backends
 - [ ] **Enterprise features** - SSO, audit logs, compliance

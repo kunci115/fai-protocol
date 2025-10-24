@@ -167,23 +167,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 🔮 Future Roadmap
 
-### v0.5.0 - Production Hardening
-- Branching and merging operations
-- Access control and user permissions
-- Web interface for repository management
-- Enhanced security features
+### v0.5.0 - Version Control Features
+- **Branching and merging operations**
+  - Create, switch, and merge branches
+  - List and delete branches
+  - Branch-specific operations
+- **Advanced commit operations**
+  - Amend commits: `fai commit --amend`
+  - Interactive rebase: `fai rebase -i`
+  - Cherry-pick commits: `fai cherry-pick <hash>`
 
-### v0.6.0 - Global P2P
-- DHT integration for global peer discovery
-- NAT traversal for restrictive networks
-- Relay nodes for connectivity
-- Mobile client applications
+### v0.6.0 - Security & Access Control
+- **Access control and user permissions**
+- **User authentication** and management
+- **Repository permissions** (read/write access)
+- **Encrypted storage** with optional encryption
+
+### v0.7.0 - Web Interface
+- **Browser-based repository management**
+- **Web UI** for common operations
+- **REST API** for external integrations
+- **Real-time collaboration** features
+
+### v0.8.0 - Global P2P
+- **DHT integration** for global peer discovery
+- **NAT traversal** for restrictive networks
+- **Relay nodes** for connectivity
+- **Mobile client** applications
 
 ### v1.0.0 - Enterprise Ready
-- Advanced security and compliance features
-- High availability and clustering
-- Enterprise integration tools
-- Commercial licensing options
+- **Advanced security** and compliance features
+- **High availability** and clustering
+- **Enterprise integration** tools
+- **Commercial licensing** options
 
 ---
 
