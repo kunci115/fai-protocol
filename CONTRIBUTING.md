@@ -24,6 +24,7 @@ We welcome contributions from the community. FAI Protocol is a decentralized ver
 4. **Test your changes**
    ```bash
    cargo test
+   cargo test --test integration_tests
    cargo build
    ```
 
@@ -77,9 +78,20 @@ We welcome contributions in several key areas:
 
 ### 🧪 Testing Requirements
 - **Unit tests** - Test individual functions and modules
-- **Integration tests** - Test component interactions
+- **Integration tests** - Test component interactions with our comprehensive suite:
+  - `test_basic_repository_workflow` - Core repository operations (init, add, commit, status, log)
+  - `test_data_integrity` - File integrity verification and content validation
+  - `test_multiple_file_operations` - Multiple file handling and batch operations
+  - `test_error_handling` - Graceful error recovery and edge cases
+  - `test_branch_operations` - Basic branch management functionality
 - **Performance tests** - Benchmark critical operations
 - **Network tests** - Test P2P functionality with mock peers
+
+**Test Requirements:**
+- All integration tests must pass before merging
+- New features should include corresponding integration tests
+- Tests must be isolated and not interfere with each other
+- Use `cargo test --test integration_tests` to run the full suite
 
 ### 📖 Documentation Requirements
 - **Code comments** - Document all public APIs and complex logic
@@ -107,10 +119,30 @@ We welcome contributions in several key areas:
 3. **Test frequently** - Run tests after each major change
 
 ### Before Submitting
-1. **Full test suite** - Ensure `cargo test` passes
+1. **Full test suite** - Ensure `cargo test` and `cargo test --test integration_tests` pass
 2. **Code formatting** - Run `cargo fmt`
 3. **Linting** - Run `cargo clippy -- -D warnings`
 4. **Documentation** - Update relevant docs and examples
+5. **CI/CD Check** - Ensure GitHub Actions workflow will pass
+
+### 🔄 CI/CD Workflow
+FAI Protocol uses GitHub Actions for automated testing:
+
+**Workflow Steps:**
+1. **Build Verification** - Compile on Ubuntu latest
+2. **Test Suite Execution** - Run unit and integration tests
+3. **Integration Testing** - Verify all repository operations work correctly
+4. **Publish Preparation** - Build release artifacts for publishing
+
+**Workflow Tests:**
+- Basic repository workflow (init, add, commit, status, log)
+- P2P networking basic functionality
+- Data integrity and consistency checks
+- Multiple file operations
+- Error handling verification
+- Branch operations
+
+The workflow ensures every contribution maintains the high quality and reliability standards of FAI Protocol.
 
 ## 🏷️ License & Contributors
 

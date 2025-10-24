@@ -41,6 +41,26 @@ fai --version
 fai --help
 ```
 
+## 🧪 Test Your Installation
+
+Run the comprehensive test suite to ensure everything works correctly:
+
+```bash
+# Test from source (if cloned from git)
+cd fai-protocol
+cargo test --test integration_tests
+
+# Should show all tests passing:
+# running 5 tests
+# test test_basic_repository_workflow ... ok
+# test test_data_integrity ... ok
+# test test_multiple_file_operations ... ok
+# test test_error_handling ... ok
+# test test_branch_operations ... ok
+#
+# test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
 ## 🎯 Quick Start
 
 1. **Initialize a repository:**
@@ -83,19 +103,19 @@ export PATH="$HOME/.local/bin:$PATH"
 
 #### Bash
 ```bash
-echo 'source <(fai --completion bash)' >> ~/.bashrc
-source ~/.bashrc
+fai completion bash > ~/.local/share/bash-completion/completions/fai
+# Or install directly
+fai completion bash | sudo tee /etc/bash_completion.d/fai
 ```
 
 #### Fish
 ```bash
-echo 'fai --completion fish | source' > ~/.config/fish/completions/fai.fish
+fai completion fish > ~/.config/fish/completions/fai.fish
 ```
 
 #### Zsh
 ```bash
-echo 'source <(fai --completion zsh)' >> ~/.zshrc
-source ~/.zshrc
+fai completion zsh > ~/.zsh/completions/_fai
 ```
 
 ## 🐳 Docker Installation

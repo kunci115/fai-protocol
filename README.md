@@ -5,8 +5,9 @@
 **Distributed Version Control for Large Files**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/kunci115/fai-protocol)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/kunci115/fai-protocol)
-[![Published](https://img.shields.io/badge/crates.io-v0.2.0-orange.svg)](https://crates.io/crates/fai-protocol)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/kunci115/fai-protocol)
+[![Published](https://img.shields.io/badge/crates.io-v0.3.0-orange.svg)](https://crates.io/crates/fai-protocol)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/kunci115/fai-protocol/actions)
 [![License](https://img.shields.io/badge/license-AGPL%203.0-red.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 
@@ -97,7 +98,7 @@ cd fai-protocol
 cargo install --path .
 ```
 
-### Using Cargo (Published v0.2.0)
+### Using Cargo (Published v0.3.0)
 ```bash
 # Install published version from crates.io
 cargo install fai-protocol
@@ -412,6 +413,9 @@ cargo build
 # Run tests
 cargo test
 
+# Run integration tests specifically
+cargo test --test integration_tests
+
 # Run with debug output
 RUST_LOG=debug cargo run --bin fai -- <command>
 ```
@@ -433,14 +437,45 @@ cargo doc --open
 fai-protocol/
 ├── src/
 │   ├── main.rs          # CLI entry point and command handling
-│   ├── lib.rs           # Core library interface  
+│   ├── lib.rs           # Core library interface
 │   ├── storage/         # Content-addressed storage and chunking
 │   ├── database/        # SQLite metadata management
 │   └── network/         # libp2p peer-to-peer networking
-├── tests/               # Integration and unit tests
+├── tests/
+│   └── integration_tests.rs  # Comprehensive integration test suite
 ├── docs/                # Documentation and examples
 └── README.md            # This file
 ```
+
+### 🧪 Testing
+FAI Protocol includes a comprehensive test suite:
+
+**Integration Tests:**
+- `test_basic_repository_workflow` - Core repository operations
+- `test_data_integrity` - File integrity and verification
+- `test_multiple_file_operations` - Handling multiple large files
+- `test_error_handling` - Graceful error recovery
+- `test_branch_operations` - Branch management basics
+
+**Running Tests:**
+```bash
+# Run all tests
+cargo test
+
+# Run integration tests only
+cargo test --test integration_tests
+
+# Run specific test
+cargo test test_basic_repository_workflow
+```
+
+The test suite ensures:
+- ✅ All repository operations work correctly
+- ✅ P2P networking functions properly
+- ✅ Large file chunking and reconstruction
+- ✅ Database operations maintain consistency
+- ✅ Error handling works gracefully
+- ✅ Multi-chunk file transfers complete successfully
 
 ## 📚 Use Cases by Industry
 
