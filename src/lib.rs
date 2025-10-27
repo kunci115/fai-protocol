@@ -8,10 +8,11 @@
 pub mod database;
 pub mod network;
 pub mod storage;
+pub mod services;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Information about a commit for display purposes
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -39,6 +40,12 @@ impl FaiProtocol {
     /// Create a new FAI Protocol instance
     pub fn new() -> Result<Self> {
         let fai_path = PathBuf::from(".fai");
+        Self::new_at(&fai_path)
+    }
+
+    /// Create a new FAI Protocol instance at a specific path
+    pub fn new_at<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let fai_path = path.as_ref().to_path_buf();
         let storage = storage::StorageManager::new(fai_path.clone())?;
         let database = database::DatabaseManager::new(&fai_path.join("db.sqlite"))?;
         Ok(Self {
@@ -51,6 +58,26 @@ impl FaiProtocol {
     /// Initialize a new FAI repository
     pub fn init() -> Result<()> {
         let fai_path = PathBuf::from(".fai");
+
+        // Create .fai directory structure
+        std::fs::create_dir_all(&fai_path)?;
+        std::fs::create_dir_all(fai_path.join("objects"))?;
+
+        // Initialize storage (creates metadata database)
+        let _storage = storage::StorageManager::new(fai_path.clone())?;
+
+        // Initialize main database
+        let _database = database::DatabaseManager::new(&fai_path.join("db.sqlite"))?;
+
+        // Create .fai/HEAD file pointing to main branch
+        std::fs::write(fai_path.join("HEAD"), "ref: refs/heads/main")?;
+
+        Ok(())
+    }
+
+    /// Initialize a new FAI repository at a specific path
+    pub fn init_at<P: AsRef<Path>>(path: P) -> Result<()> {
+        let fai_path = path.as_ref().to_path_buf();
 
         // Create .fai directory structure
         std::fs::create_dir_all(&fai_path)?;
@@ -201,6 +228,28 @@ impl FaiProtocol {
         } else {
             Ok(None)
         }
+    }
+
+    /// Get the current HEAD commit hash
+    pub fn get_head_commit(&self) -> Result<Option<String>> {
+        self.get_head()
+    }
+
+    /// Update HEAD to point to a specific commit
+    pub fn update_head(&self, commit_hash: &str) -> Result<()> {
+        let head_path = self.fai_path.join("HEAD");
+        std::fs::write(&head_path, commit_hash)?;
+        Ok(())
+    }
+
+    /// Get all commits in the repository
+    pub fn get_all_commits(&self) -> Result<Vec<Commit>> {
+        self.database.get_all_commits()
+    }
+
+    /// Get files included in a commit
+    pub fn get_commit_files(&self, commit_hash: &str) -> Result<Vec<(String, String, u64)>> {
+        self.database.get_commit_files(commit_hash)
     }
 }
 

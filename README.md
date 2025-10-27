@@ -5,8 +5,8 @@
 **Distributed Version Control for Large Files**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/kunci115/fai-protocol)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/kunci115/fai-protocol)
-[![Published](https://img.shields.io/badge/crates.io-v0.4.0-orange.svg)](https://crates.io/crates/fai-protocol)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/kunci115/fai-protocol)
+[![Published](https://img.shields.io/badge/crates.io-v0.4.1-orange.svg)](https://crates.io/crates/fai-protocol)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/kunci115/fai-protocol/actions)
 [![License](https://img.shields.io/badge/license-AGPL%203.0-red.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
@@ -89,7 +89,40 @@ fai serve
 
 ---
 
-## 🎉 What's New in v0.4.0
+## 🎉 What's New in v0.4.1
+
+### 🌿 Complete Branch Management System
+**Full Git-like branching support:**
+- **Create branches**: `fai branch feature-name` - Create new branches pointing to any commit
+- **List branches**: `fai branch --list` - Show all branches with current branch indicator
+- **Switch branches**: `fai checkout feature-name` - Switch between branches seamlessly
+- **Delete branches**: `fai branch --delete feature-name` - Remove branches with protection for current branch
+- **Branch isolation** - Each branch maintains independent commit history
+
+### 🔄 Commit Amend Functionality
+**Fix and improve the last commit:**
+- **Amend commits**: `fai commit-amend -m "new message"` - Change message or add forgotten files
+- **Preserves history** - Original commit remains in log for transparency
+- **Smart staging** - Handles both staged files and files from previous commit
+- **Integrity maintained** - Proper hash regeneration and database consistency
+
+### 🌐 Web Interface & REST API
+**Browser-based repository management:**
+- **HTTP server**: `fai web --host 127.0.0.1 --port 8080` - Start web interface
+- **REST API endpoints**: `/api/status`, `/api/branches`, `/api/commits`, `/api/files`
+- **Real-time status** - View repository information and statistics
+- **Branch management** - List and inspect branches via web interface
+- **HTML interface** - Clean, responsive web UI for common operations
+
+### 🏗️ Modular Architecture Redesign
+**Clean, maintainable service-oriented architecture:**
+- **Service modules** - Separate modules for CLI, branch, web, and security services
+- **Better separation of concerns** - Each service handles specific functionality
+- **Improved maintainability** - Easier to extend and modify individual features
+- **Cleaner APIs** - Well-defined interfaces between services
+- **Enhanced error handling** - Proper error propagation and user feedback
+
+## 🎉 Previous Features (v0.4.0)
 
 ### 🚀 Multi-Chunk File Transfer System
 **Complete support for large files with automatic chunking:**
@@ -107,22 +140,6 @@ fai serve
 - **Performance benchmarks** for large file transfers
 - **Network simulation** for P2P functionality
 
-### 📚 Enhanced Documentation
-**Complete documentation overhaul:**
-- **Architecture guide** with detailed technical diagrams
-- **Installation guide** with testing verification
-- **Contributing guidelines** with development workflow
-- **Comprehensive examples** for all use cases
-- **API documentation** with code examples
-
-### 🔧 Production Improvements
-**Enterprise-ready reliability and performance:**
-- **Enhanced error handling** with detailed logging
-- **Better resource management** and cleanup
-- **Optimized build configuration** for smaller binaries
-- **Cross-platform compatibility** improvements
-- **Shell completion** for better CLI experience
-
 ---
 
 ## 📦 Installation
@@ -137,7 +154,7 @@ cd fai-protocol
 cargo install --path .
 ```
 
-### Using Cargo (Published v0.4.0)
+### Using Cargo (Published v0.4.1)
 ```bash
 # Install published version from crates.io
 cargo install fai-protocol
@@ -194,9 +211,69 @@ fai commit -m "Update ResNet model with improved accuracy"
 fai log
 → commit xyz78901 (2024-01-15 14:30:22)
 →     Update ResNet model with improved accuracy
-→ 
+→
 → commit abc12345 (2024-01-15 12:15:10)
 →     Add game texture pack and 4K footage
+```
+
+### Branch Management (New in v0.4.1)
+```bash
+# Create a new branch for development
+fai branch feature-ui-improvements
+✅ Created branch 'feature-ui-improvements' pointing to abc12345
+
+# List all branches
+fai branch --list
+→ Branches:
+→ * main                    abc12345
+→   feature-ui-improvements abc12345
+
+# Switch to your new branch
+fai checkout feature-ui-improvements
+✅ Switched to branch 'feature-ui-improvements'
+
+# Add new changes and commit
+fai add new-ui-assets/
+fai commit -m "Add new UI components"
+
+# Switch back to main when ready
+fai checkout main
+✅ Switched to branch 'main'
+
+# Delete branches when no longer needed
+fai branch --delete feature-ui-improvements
+✅ Deleted branch 'feature-ui-improvements'
+```
+
+### Commit Amend (New in v0.4.1)
+```bash
+# Made a commit but forgot to add a file or want to change the message?
+fai commit -m "Add new features"
+
+# Realize you want to change the message or add more files
+fai add missing-file.txt
+fai commit-amend -m "Add new features and fix configuration"
+
+# Your last commit is now updated with the new message and files
+fai log
+→ commit fedcba98 (2024-01-15 15:45:30)
+→     Add new features and fix configuration
+→
+→ commit abc12345 (2024-01-15 12:15:10)
+→     Add game texture pack and 4K footage
+```
+
+### Web Interface (New in v0.4.1)
+```bash
+# Start the web interface server
+fai web --host 127.0.0.1 --port 8080
+✅ Starting FAI web server on http://127.0.0.1:8080
+
+# Now open your browser and navigate to:
+# http://127.0.0.1:8080 - Main web interface
+# http://127.0.0.1:8080/api/status - Repository status API
+# http://127.0.0.1:8080/api/branches - Branch information API
+# http://127.0.0.1:8080/api/commits - Commit history API
 ```
 
 ### Distributed Collaboration
@@ -434,16 +511,26 @@ Benefits:
 - [x] **Error handling** - Robust error recovery
 - [x] **Performance optimization** - Parallel transfers and chunking
 
-### 🚧 Phase 6: Version Control Features (Not Yet Implemented)
-- [ ] **Branching and merging** - Full Git-like branch support
-  - Create branches: `fai branch feature-name`
-  - Switch branches: `fai checkout feature-name`
+### ✅ Phase 6: Version Control Features (Done - v0.4.1)
+- [x] **Branching and merging** - Full Git-like branch support
+  - Create branches: `fai branch feature-name` ✅
+  - Switch branches: `fai checkout feature-name` ✅
+  - Delete branches: `fai branch --delete feature-name` ✅
+  - List branches: `fai branch --list` ✅
+- [x] **Advanced commit operations**
+  - Amend commits: `fai commit-amend` ✅
+  - Web interface: `fai web` ✅
+- [x] **Modular Architecture** - Service-oriented design ✅
+
+### 🚧 Phase 6.1: Advanced Version Control (Not Yet Implemented)
+- [ ] **Merge operations**
   - Merge branches: `fai merge feature-name`
-  - List branches: `fai branch --list`
+  - Merge conflict resolution
+  - Fast-forward merges
 - [ ] **Advanced commit operations**
-  - Amend commits: `fai commit --amend`
   - Interactive rebase: `fai rebase -i`
   - Cherry-pick commits: `fai cherry-pick <hash>`
+  - Commit history editing
 
 ### 🔒 Phase 7: Security & Access Control (Future)
 - [ ] **Access control** - Encryption and permissions
@@ -512,7 +599,13 @@ fai-protocol/
 │   ├── lib.rs           # Core library interface
 │   ├── storage/         # Content-addressed storage and chunking
 │   ├── database/        # SQLite metadata management
-│   └── network/         # libp2p peer-to-peer networking
+│   ├── network/         # libp2p peer-to-peer networking
+│   └── services/        # Modular service architecture (v0.4.1)
+│       ├── mod.rs       # Service module declarations
+│       ├── cli_service.rs      # CLI command handling
+│       ├── branch_service.rs   # Branch management
+│       ├── web_service.rs      # Web interface and REST API
+│       └── security_service.rs # Authentication and encryption
 ├── tests/
 │   └── integration_tests.rs  # Comprehensive integration test suite
 ├── docs/                # Documentation and examples

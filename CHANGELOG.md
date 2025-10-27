@@ -5,6 +5,97 @@ All notable changes to FAI Protocol will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-01-27
+
+### 🎉 BREAKING CHANGES
+- **Modular Architecture Redesign** - Complete refactoring to service-oriented architecture
+  - New service modules in `src/services/` directory
+  - Better separation of concerns with dedicated services for CLI, branches, web, and security
+  - Cleaner APIs and improved maintainability
+
+### 🌿 BRANCH MANAGEMENT SYSTEM
+- **Complete Git-like branching support**:
+  - `fai branch <name>` - Create new branches pointing to any commit
+  - `fai branch --list` - List all branches with current branch indicator (*)
+  - `fai checkout <branch>` - Switch between branches seamlessly
+  - `fai branch --delete <branch>` - Delete branches with protection for current branch
+  - Independent commit history for each branch
+- **Branch reference system** with proper HEAD management
+- **Database schema updates** for branch metadata storage
+
+### 🔄 COMMIT AMEND FUNCTIONALITY
+- **Commit amendment support**:
+  - `fai commit-amend -m "new message"` - Change last commit message
+  - `fai commit-amend` - Keep original message but add staged files
+  - Smart staging handling - works with both staged files and files from previous commit
+- **History preservation** - Original commit remains in log for transparency
+- **Integrity maintenance** - Proper hash regeneration and database consistency
+
+### 🌐 WEB INTERFACE & REST API
+- **HTTP web server**:
+  - `fai web --host 127.0.0.1 --port 8080` - Start web interface server
+  - Configurable host and port binding
+  - Graceful shutdown with Ctrl+C handling
+- **REST API endpoints**:
+  - `GET /api/status` - Repository status and statistics
+  - `GET /api/branches` - Branch listing with current branch indicators
+  - `GET /api/commits` - Commit history with metadata
+  - `GET /api/files` - Staged files information
+  - `GET /api/log` - Detailed commit log
+- **HTML web interface**:
+  - Clean, responsive UI for repository management
+  - Real-time status display
+  - Navigation between different repository views
+
+### 🏗️ ARCHITECTURE IMPROVEMENTS
+- **Service-oriented design**:
+  - `src/services/cli_service.rs` - CLI command handling and operations
+  - `src/services/branch_service.rs` - Branch management operations
+  - `src/services/web_service.rs` - Web interface and API server
+  - `src/services/security_service.rs` - Authentication and encryption foundation
+- **Better error handling** with proper error propagation
+- **Enhanced type safety** with well-defined service interfaces
+- **Improved maintainability** through modular design
+
+### 🔧 TECHNICAL IMPROVEMENTS
+- **Database enhancements**:
+  - Fixed foreign key constraints for branch initialization
+  - Improved timestamp handling with proper DateTime conversion
+  - Better database schema for branch and commit management
+- **Build system updates**:
+  - Added chrono feature to rusqlite for proper timestamp support
+  - Updated dependencies for better compatibility
+  - Improved compilation times and binary size
+- **Code quality improvements**:
+  - Reduced compilation warnings
+  - Better memory management
+  - Enhanced thread safety
+
+### 🧪 TESTING & QUALITY
+- **Comprehensive feature testing**:
+  - All new branch operations thoroughly tested
+  - Commit amend functionality verified
+  - Web interface endpoints validated
+  - Database operations stress-tested
+- **Integration test updates** for new features
+- **Error handling validation** across all new services
+
+### 📚 DOCUMENTATION UPDATES
+- **README overhaul**:
+  - Added v0.4.1 feature documentation
+  - New usage examples for branching, amend, and web interface
+  - Updated project structure to reflect modular architecture
+  - Roadmap updated with completed features
+- **Architecture documentation** updates
+- **API documentation** for new web endpoints
+
+### 🐛 BUG FIXES
+- **Database foreign key constraint** issue during repository initialization
+- **Timestamp conversion** error in database reads
+- **Web service compilation** issues with axum 0.7 compatibility
+- **CLI service error handling** for staged file operations
+- **Memory management** improvements in storage operations
+
 ## [0.4.0] - 2024-10-24
 
 ### 🎉 MAJOR FEATURES

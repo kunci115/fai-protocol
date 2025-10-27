@@ -3,6 +3,22 @@
 **We're building the future of distributed version control!**
 We welcome contributions from the community. FAI Protocol is a decentralized version control system designed for large files and AI models.
 
+## 🎯 What We're Building
+
+FAI Protocol is Git for large files, done right. We're solving the problem that traditional Git can't handle files >100MB, while existing solutions like Git LFS are expensive and centralized.
+
+**Current Focus Areas (v0.4.1):**
+- ✅ **Complete branch management** - Git-like branching with `fai branch`, `fai checkout`
+- ✅ **Commit amend functionality** - Fix last commits with `fai commit-amend`
+- ✅ **Web interface** - Browser-based repository management
+- ✅ **Modular architecture** - Service-oriented design for maintainability
+
+**Next Milestones:**
+- 🚧 **Merge operations** - `fai merge` with conflict resolution
+- 🚧 **Advanced Git features** - `fai rebase`, `fai cherry-pick`
+- 🚧 **Security & authentication** - User management and access control
+- 🚧 **Global P2P** - DHT integration and NAT traversal
+
 ## 🚀 Quick Start
 
 1. **Fork the repository** on GitHub
@@ -39,9 +55,21 @@ We welcome contributions from the community. FAI Protocol is a decentralized ver
    git push origin feature-name
    ```
 
-## 🏗️ Development Areas
+## 🏗️ Development Areas (v0.4.1 Focus)
 
-We welcome contributions in several key areas:
+We welcome contributions in several key areas, with current focus on version control features:
+
+### 🌿 Version Control Features (Priority)
+- **Merge operations** - Implement `fai merge` with conflict resolution
+- **Advanced Git features** - Add `fai rebase -i`, `fai cherry-pick`
+- **Branch visualization** - Visual branch history and merge graphs
+- **Commit editing** - Interactive commit history management
+
+### 🌐 Web Interface Enhancement
+- **Interactive UI** - Add file staging, commit, and branch management
+- **Real-time updates** - WebSocket support for live status updates
+- **Authentication** - User login and session management
+- **Mobile responsive** - Better mobile experience
 
 ### 📦 Core Library
 - **Storage optimization** - Improve chunking and deduplication algorithms
@@ -49,11 +77,11 @@ We welcome contributions in several key areas:
 - **Database efficiency** - Optimize SQLite operations and queries
 - **CLI usability** - Improve user experience and error handling
 
-### 🌐 Network & Distributed Features
-- **Peer discovery** - Improve mDNS and DHT implementations
-- **Security** - Add encryption and authentication mechanisms
-- **Protocol improvements** - Enhance libp2p request-response protocols
-- **NAT traversal** - Help peers behind restrictive networks
+### 🔒 Security & Authentication
+- **User management** - Implement security service features
+- **Access control** - Repository permissions and team management
+- **Encryption** - File encryption and secure transfers
+- **Audit logging** - Track repository access and changes
 
 ### 🔧 Tooling & Ecosystem
 - **IDE integrations** - VS Code, IntelliJ, Vim plugins
@@ -69,11 +97,41 @@ We welcome contributions in several key areas:
 
 ## 📋 Code Standards
 
+### 🏗️ Architecture Guidelines (v0.4.1)
+FAI Protocol follows a **service-oriented modular architecture**:
+
+```
+src/
+├── services/              # Service modules (v0.4.1)
+│   ├── cli_service.rs     # CLI command handling and operations
+│   ├── branch_service.rs  # Branch management operations
+│   ├── web_service.rs     # Web interface and REST API
+│   └── security_service.rs # Authentication and encryption
+├── storage/               # Content-addressed storage
+├── database/              # SQLite metadata management
+├── network/               # libp2p P2P networking
+└── main.rs               # CLI entry point
+```
+
+**Service Design Principles:**
+- **Single responsibility** - Each service handles one domain
+- **Clean interfaces** - Well-defined APIs between services
+- **Error propagation** - Proper error handling across service boundaries
+- **Testability** - Services can be tested independently
+
+**Adding New Services:**
+1. Create service module in `src/services/`
+2. Implement service with clear public interface
+3. Add service to `src/services/mod.rs`
+4. Include comprehensive tests
+5. Update documentation
+
 ### 🦀 Rust Requirements
 - **Rust 2021 Edition** with modern language features
 - **Safe Rust** - Avoid unsafe code where possible
 - **Error handling** - Use `Result` and `anyhow` for proper error management
 - **Async/await** - Use Tokio runtime for all I/O operations
+- **Service-oriented design** - Follow modular architecture patterns
 - **Documentation** - Include comprehensive `cargo doc` comments
 
 ### 🧪 Testing Requirements

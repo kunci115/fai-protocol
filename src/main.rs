@@ -6,6 +6,9 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
+// Import services
+use fai_protocol::services as services;
+
 #[derive(Parser)]
 #[command(name = "fai")]
 #[command(about = "FAI Protocol - Distributed version control for large files")]
@@ -74,6 +77,37 @@ enum Commands {
     Completion {
         /// Shell type (bash, fish, zsh, powershell, elvish)
         shell: clap_complete::Shell,
+    },
+    /// Branch operations
+    Branch {
+        /// Branch name to create or delete
+        branch_name: Option<String>,
+        /// Delete the specified branch
+        #[arg(long)]
+        delete: bool,
+        /// List all branches
+        #[arg(long, short)]
+        list: bool,
+    },
+    /// Switch to a different branch
+    Checkout {
+        /// Branch name to switch to
+        branch_name: String,
+    },
+    /// Amend the last commit
+    CommitAmend {
+        /// New commit message (optional, keeps original if not provided)
+        #[arg(short, long)]
+        message: Option<String>,
+    },
+    /// Start web interface server
+    Web {
+        /// Host to bind to (default: 127.0.0.1)
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Port to bind to (default: 8080)
+        #[arg(long, default_value = "8080")]
+        port: u16,
     },
 }
 
@@ -1417,6 +1451,40 @@ async fn main() -> Result<()> {
                 // Small delay to prevent busy-waiting
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             }
+        }
+        Commands::Branch { branch_name, delete, list } => {
+            let cli_service = services::CliService::new(".");
+            cli_service.handle_branch_command(branch_name, delete, list)?;
+        }
+        Commands::Checkout { branch_name } => {
+            let cli_service = services::CliService::new(".");
+            cli_service.handle_checkout_command(&branch_name)?;
+        }
+        Commands::CommitAmend { message } => {
+            let cli_service = services::CliService::new(".");
+            cli_service.handle_commit_amend(message)?;
+        }
+        Commands::Web { host, port } => {
+            use crate::services::web_service::{WebService, WebServiceConfig};
+
+            let config = WebServiceConfig {
+                host: host.clone(),
+                port,
+                static_dir: None,
+                enable_auth: false,
+            };
+
+            let mut web_service = WebService::new(".", config);
+
+            println!("Starting FAI web server on http://{}:{}", host, port);
+            web_service.start().await?;
+
+            // Keep the server running
+            println!("Press Ctrl+C to stop the server");
+            tokio::signal::ctrl_c().await?;
+
+            println!("Stopping web server...");
+            web_service.stop().await?;
         }
     }
 

@@ -1,15 +1,15 @@
 [package]
 name = "fai-protocol"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["FAI Protocol Team"]
-description = "A decentralized version control system for AI models and large files"
+description = "A decentralized version control system for AI models and large files with Git-like branching and web interface"
 license = "AGPL-3.0"
 repository = "https://github.com/kunci115/fai-protocol"
 homepage = "https://github.com/kunci115/fai-protocol"
 documentation = "https://docs.rs/fai-protocol"
-keywords = ["version-control", "distributed", "p2p", "ai", "models"]
-categories = ["development-tools", "network-programming"]
+keywords = ["version-control", "distributed", "p2p", "ai", "models", "branching", "web-interface", "git"]
+categories = ["development-tools", "network-programming", "web-programming", "command-line-utilities"]
 readme = "README.md"
 
 # Exclude large files from package
@@ -37,7 +37,7 @@ blake3 = "1.5"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rusqlite = { version = "0.30", features = ["bundled"] }
+rusqlite = { version = "0.30", features = ["bundled", "chrono"] }
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 tempfile = "3.8"
@@ -50,6 +50,13 @@ aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.8"
 ring = "0.17"
+
+# Web service dependencies
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+toml = "0.8"
 
 [[bin]]
 name = "fai"

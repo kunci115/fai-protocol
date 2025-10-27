@@ -101,6 +101,36 @@ impl DatabaseManager {
             [],
         )?;
 
+        // Create branches table for branch management
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS branches (
+                name TEXT PRIMARY KEY,
+                head_commit TEXT NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            )",
+            [],
+        )?;
+
+        // Create branch refs table for tracking branch references
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS branch_refs (
+                ref_name TEXT PRIMARY KEY,
+                target TEXT NOT NULL
+            )",
+            [],
+        )?;
+
+        // Initialize default branch if not exists
+        self.conn.execute(
+            "INSERT OR IGNORE INTO branches (name, head_commit) VALUES ('main', '0000000000000000000000000000000000000000')",
+            [],
+        )?;
+
+        self.conn.execute(
+            "INSERT OR IGNORE INTO branch_refs (ref_name, target) VALUES ('HEAD', 'refs/heads/main')",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -377,7 +407,237 @@ impl DatabaseManager {
 
         Ok(commits)
     }
-}
+
+    // === BRANCH MANAGEMENT METHODS ===
+
+    /// Create a new branch
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    /// * `commit_hash` - Commit hash to point branch to
+    pub fn create_branch(&self, name: &str, commit_hash: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO branches (name, head_commit) VALUES (?1, ?2)",
+            params![name, commit_hash],
+        )?;
+        Ok(())
+    }
+
+    /// Get the head commit of a branch
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    ///
+    /// # Returns
+    /// Option containing the commit hash if branch exists
+    pub fn get_branch_head(&self, name: &str) -> Result<Option<String>> {
+        let result = self.conn.query_row(
+            "SELECT head_commit FROM branches WHERE name = ?1",
+            [name],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(hash) => Ok(Some(hash)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Update the head commit of a branch
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    /// * `commit_hash` - New commit hash
+    pub fn update_branch_head(&self, name: &str, commit_hash: &str) -> Result<()> {
+        let rows_affected = self.conn.execute(
+            "UPDATE branches SET head_commit = ?1 WHERE name = ?2",
+            params![commit_hash, name],
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Branch '{}' does not exist", name));
+        }
+
+        Ok(())
+    }
+
+    /// List all branches
+    ///
+    /// # Returns
+    /// Vector of tuples containing (branch_name, head_commit)
+    pub fn list_branches(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name, head_commit FROM branches ORDER BY name")?;
+
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+
+        let mut branches = Vec::new();
+        for row in rows {
+            branches.push(row?);
+        }
+
+        Ok(branches)
+    }
+
+    /// Delete a branch
+    ///
+    /// # Arguments
+    /// * `name` - Branch name to delete
+    ///
+    /// Note: Cannot delete the current branch
+    pub fn delete_branch(&self, name: &str) -> Result<()> {
+        // Check if it's the current branch
+        if let Ok(current_ref) = self.get_current_ref() {
+            if current_ref == format!("refs/heads/{}", name) {
+                return Err(anyhow::anyhow!("Cannot delete current branch '{}'", name));
+            }
+        }
+
+        let rows_affected = self.conn.execute(
+            "DELETE FROM branches WHERE name = ?1",
+            [name],
+        )?;
+
+        if rows_affected == 0 {
+            return Err(anyhow::anyhow!("Branch '{}' does not exist", name));
+        }
+
+        Ok(())
+    }
+
+    /// Get current branch reference
+    ///
+    /// # Returns
+    /// Current branch reference (e.g., "refs/heads/main")
+    pub fn get_current_ref(&self) -> Result<String> {
+        let ref_target = self.conn.query_row(
+            "SELECT target FROM branch_refs WHERE ref_name = 'HEAD'",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(ref_target)
+    }
+
+    /// Set current branch reference
+    ///
+    /// # Arguments
+    /// * `ref_name` - Reference to switch to (e.g., "refs/heads/feature")
+    pub fn set_current_ref(&self, ref_name: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE branch_refs SET target = ?1 WHERE ref_name = 'HEAD'",
+            [ref_name],
+        )?;
+        Ok(())
+    }
+
+    /// Check if a branch exists
+    ///
+    /// # Arguments
+    /// * `name` - Branch name
+    ///
+    /// # Returns
+    /// True if branch exists
+    pub fn branch_exists(&self, name: &str) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM branches WHERE name = ?1",
+            [name],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    /// Get current branch name
+    ///
+    /// # Returns
+    /// Current branch name (e.g., "main")
+    pub fn get_current_branch(&self) -> Result<String> {
+        let ref_target = self.get_current_ref()?;
+        if ref_target.starts_with("refs/heads/") {
+            Ok(ref_target.strip_prefix("refs/heads/").unwrap().to_string())
+        } else {
+            Err(anyhow::anyhow!("Not on a branch: {}", ref_target))
+        }
+    }
+
+    /// Get the current HEAD commit hash
+    pub fn get_head_commit(&self) -> Result<Option<String>> {
+        // Read HEAD file
+        let fai_path = std::path::Path::new(".fai");
+        let head_path = fai_path.join("HEAD");
+        if head_path.exists() {
+            let content = std::fs::read_to_string(&head_path)?;
+            if content.starts_with("ref:") {
+                // Handle branch references: ref: refs/heads/main
+                let parts: Vec<&str> = content.trim().splitn(2, ' ').collect();
+                if parts.len() >= 2 && parts[0] == "ref:" {
+                    let ref_target = parts[1];
+                    if ref_target.starts_with("refs/heads/") {
+                        let branch_name = ref_target.strip_prefix("refs/heads/").unwrap();
+                        self.get_branch_head(branch_name)
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(Some(content.trim().to_string()))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update HEAD file
+    pub fn update_head(&self, commit_hash: &str) -> Result<()> {
+        let fai_path = std::path::Path::new(".fai");
+        let head_path = fai_path.join("HEAD");
+        std::fs::write(head_path, commit_hash)?;
+        Ok(())
+    }
+
+    /// Get all commits in repository
+    pub fn get_all_commits(&self) -> Result<Vec<Commit>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT hash, message, timestamp, is_merge FROM commits ORDER BY timestamp DESC")?;
+
+        let rows = stmt.query_map([], |row| {
+            let timestamp_ms: i64 = row.get(2)?;
+            let timestamp = DateTime::from_timestamp_millis(timestamp_ms)
+                .ok_or_else(|| rusqlite::Error::InvalidColumnType(2, "timestamp".to_string(), rusqlite::types::Type::Integer))?;
+            Ok(Commit {
+                hash: row.get(0)?,
+                message: row.get(1)?,
+                timestamp,
+                parents: Vec::new(), // TODO: Load parents from commit_parents table
+                is_merge: row.get(3)?,
+            })
+        })?;
+
+        let mut commits = Vec::new();
+        for row in rows {
+            let mut commit = row?;
+
+            // Load parents for this commit
+            let mut parent_stmt = self.conn.prepare(
+                "SELECT parent_hash FROM commit_parents WHERE commit_hash = ?1 ORDER BY parent_hash"
+            )?;
+
+            let parent_rows = parent_stmt.query_map([commit.hash.as_str()], |row| row.get(0))?;
+            for parent_hash in parent_rows {
+                commit.parents.push(parent_hash?);
+            }
+
+            commits.push(commit);
+        }
+
+        Ok(commits)
+    }
+
+    }
 
 #[cfg(test)]
 mod tests {
